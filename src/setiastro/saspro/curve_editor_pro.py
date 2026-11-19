@@ -2907,6 +2907,8 @@ class CurvesDialogPro(QDialog):
 
     def _toggle_preview(self, on):
         self._show_proc = bool(on)
+        if self._show_proc and self._detail_preview:
+            self._schedule_full_bg()
         if self._preview_proc is None:
             self._quick_preview()
         img = self._preview_proc if (self._show_proc and self._preview_proc is not None) else self._preview_orig
@@ -3477,6 +3479,9 @@ class CurvesDialogPro(QDialog):
     def _zoom_actual(self):
         if self._full_img is None or self._pix is None:
             return
+        if not self._detail_preview and not self._reduced_preview():
+            self._set_zoom(1.0)
+            return
         self._detail_preview = True
         if not self._show_proc:
             self._update_preview_pix(self._full_img)
@@ -3506,14 +3511,16 @@ class CurvesDialogPro(QDialog):
     def _fit(self):
         if self._pix is None:
             return
-        if self._detail_preview:
+        vp = self.scroll.viewport().size()
+        height, width = self._full_img.shape[:2]
+        source_fit = min(vp.width() / width, vp.height() / height)
+        if self._detail_preview and source_fit < 1.0:
             self._detail_preview = False
             if not self._full_bg_enabled:
                 self._invalidate_full_cache()
             image = (self._preview_proc if self._show_proc
                      else self._preview_orig)
             self._update_preview_pix(image)
-        vp = self.scroll.viewport().size()
         if self._pix.width() == 0 or self._pix.height() == 0:
             return
         scale = min(vp.width() / self._pix.width(),

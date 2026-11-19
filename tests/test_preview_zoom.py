@@ -191,6 +191,14 @@ def test_tool_zoom_is_source_scaled_and_non_destructive(
         assert bar._scale() == pytest.approx(1.25, abs=.01)
         press('Ctrl+-')
         assert bar._scale() == pytest.approx(1, abs=.01)
+        if module_name == 'curve_editor_pro':
+            # A fit above 100% still needs detail; reuse the calculated result.
+            cached = dialog._full_cache
+            dialog.resize(2600, 1000)
+            QTest.qWait(50)
+            press('Ctrl+0')
+            assert dialog._detail_preview
+            assert dialog._full_cache is cached
         if module_name == 'stat_stretch':
             # Fast and full-res renders must retain the same source zoom.
             dialog._set_preview_pixmap(image[::4, ::4])
@@ -212,6 +220,19 @@ def test_tool_zoom_is_source_scaled_and_non_destructive(
         dialog.resize(1250, 730)
         QTest.qWait(100)
         assert bar._scale() == pytest.approx(1, abs=.01)
+        if module_name == 'curve_editor_pro':
+            press('Ctrl+0')
+            assert dialog._full_cache is None
+            dialog.btn_preview.setChecked(False)
+            press('Ctrl+1')
+            assert dialog._pix.width() == image.shape[1]
+            dialog.btn_preview.setChecked(True)
+            for _ in range(500):
+                if dialog._full_cache is not None:
+                    break
+                QTest.qWait(20)
+            assert dialog._full_cache is not None
+            assert not dialog._reduced_preview()
         assert doc.image is image
         np.testing.assert_array_equal(doc.image, expected)
     finally:
