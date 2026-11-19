@@ -20,7 +20,7 @@ from setiastro.saspro.imageops.stretch import (
 )
 from setiastro.saspro.help_support import make_help_button
 
-from setiastro.saspro.widgets.themed_buttons import themed_toolbtn
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 from setiastro.saspro.luminancerecombine import LUMA_PROFILES
 from setiastro.saspro.shortcuts import PresetDragHandle, _pack_cmd_payload
 from setiastro.saspro.resources import statstretch_path
@@ -326,17 +326,6 @@ class StatisticalStretchDialog(QDialog):
         self.preview_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.preview_scroll.viewport().installEventFilter(self)
 
-        # Zoom buttons
-        zoom_row = QHBoxLayout()
-        self.btn_zoom_out = themed_toolbtn("zoom-out", "Zoom Out")
-        self.btn_zoom_in  = themed_toolbtn("zoom-in", "Zoom In")
-        self.btn_zoom_100 = themed_toolbtn("zoom-original", "1:1")
-        self.btn_zoom_fit = themed_toolbtn("zoom-fit-best", "Fit")
-        zoom_row.addStretch(1)
-        for b in (self.btn_zoom_out, self.btn_zoom_in, self.btn_zoom_100, self.btn_zoom_fit):
-            zoom_row.addWidget(b)
-        zoom_row.addStretch(1)
-
         # ── Buttons ───────────────────────────────────────────────────────
         self.btn_preview = QPushButton(self.tr("Preview"))
         self.btn_apply   = QPushButton(self.tr("Apply"))
@@ -458,8 +447,15 @@ class StatisticalStretchDialog(QDialog):
         left.addLayout(drag_row)
 
         right = QVBoxLayout()
-        right.addLayout(zoom_row)
         right.addWidget(self.preview_scroll, 1)
+        self.zoom_bar = PreviewZoomBar(
+            self, self.preview_scroll.viewport(),
+            zoom_in=lambda: self._zoom_by(1.25),
+            zoom_out=lambda: self._zoom_by(0.8),
+            actual=self._zoom_reset_100, fit=self._fit_preview,
+            scale=self._source_zoom, reduced=self._reduced_preview,
+        )
+        right.addWidget(self.zoom_bar)
 
         main_lay = QHBoxLayout(self)
         main_lay.addLayout(left, 0)
@@ -537,11 +533,7 @@ class StatisticalStretchDialog(QDialog):
         self.chk_normalize.toggled.connect(lambda _: self._on_any_control_changed())
         self.cmb_luma.currentTextChanged.connect(lambda _: self._on_any_control_changed())
 
-        # Zoom buttons
-        self.btn_zoom_in.clicked.connect(lambda: self._zoom_by(1.25))
-        self.btn_zoom_out.clicked.connect(lambda: self._zoom_by(1/1.25))
-        self.btn_zoom_100.clicked.connect(self._zoom_reset_100)
-        self.btn_zoom_fit.clicked.connect(self._fit_preview)
+
 
         # Main buttons
         self.btn_preview.clicked.connect(self._do_preview)
@@ -1348,14 +1340,27 @@ class StatisticalStretchDialog(QDialog):
             return
         sx = vp.width()  / iw
         sy = vp.height() / ih
-        self._preview_scale = max(0.05, min(sx, sy))
+        self._preview_scale = max(1e-6, min(sx, sy))
         self._fit_mode = True
         self._update_preview_scaled()
 
+    def _preview_ratio(self):
+        if self._preview_qimg is None:
+            return 1.0
+        return self._preview_qimg.width() / self._target_doc().image.shape[1]
+
+    def _source_zoom(self):
+        return self._preview_scale * self._preview_ratio()
+
+    def _reduced_preview(self):
+        return self._preview_ratio() < 0.999
+
     def _zoom_reset_100(self):
-        self._fit_mode = False
-        self._preview_scale = 1.0
-        self._update_preview_scaled()
+        if self._preview_qimg is None:
+            return
+        target = 1.0 / self._preview_ratio()
+        self._zoom_at(target / self._preview_scale,
+                      self.preview_scroll.viewport().rect().center())
 
     def _zoom_by(self, factor: float):
         vp = self.preview_scroll.viewport()
@@ -1373,7 +1378,9 @@ class StatisticalStretchDialog(QDialog):
         ix = cx / old_scale
         iy = cy / old_scale
         self._fit_mode = False
-        new_scale = max(0.05, min(old_scale * float(factor), 8.0))
+        new_scale = max(1e-6, min(
+            old_scale * float(factor), 8.0 / self._preview_ratio()
+        ))
         self._preview_scale = new_scale
         self._update_preview_scaled()
         ncx = int(ix * new_scale)
@@ -1491,6 +1498,8 @@ class StatisticalStretchDialog(QDialog):
         ptr = sip.voidptr(self._last_preview.ctypes.data)
         qimg = QImage(ptr, w, h, bytes_per_line, QImage.Format.Format_RGB888)
 
+        if self._preview_qimg is not None and not self._fit_mode:
+            self._preview_scale *= self._preview_qimg.width() / qimg.width()
         self._preview_qimg = qimg
         self._apply_current_zoom()
 

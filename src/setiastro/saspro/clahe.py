@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (
 # Import centralized widgets
 from setiastro.saspro.widgets.graphics_views import ZoomableGraphicsView
 from setiastro.saspro.widgets.image_utils import extract_mask_resized as _get_active_mask_resized
-from setiastro.saspro.widgets.themed_buttons import themed_toolbtn
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 from setiastro.saspro.help_support import make_help_button
 
 # Patch revision marker — used by the patcher for idempotency. Do not remove.
@@ -625,27 +625,14 @@ class CLAHEDialogPro(QDialog):
         z = QHBoxLayout()
         self.lbl_status = QLabel("")
         self.lbl_status.setEnabled(False)
+        self.zoom_bar = PreviewZoomBar(
+            self, self.view.viewport(), zoom_in=self.view.zoom_in,
+            zoom_out=self.view.zoom_out, actual=self._zoom_actual,
+            fit=lambda: self.view.fit_to_item(self.pix),
+            scale=self._view_scale, ctrl_wheel=True,
+        )
+        z.addWidget(self.zoom_bar, 1)
         z.addWidget(self.lbl_status)
-        z.addStretch(1)
-        self.lbl_zoom = QLabel("")
-        z.addWidget(self.lbl_zoom)
-
-        self.btn_zoom_in  = themed_toolbtn("zoom-in", "Zoom In")
-        self.btn_zoom_out = themed_toolbtn("zoom-out", "Zoom Out")
-        self.btn_zoom_fit = themed_toolbtn("zoom-fit-best", "Fit to Preview")
-        self.btn_zoom_1x  = QToolButton(); self.btn_zoom_1x.setText("1:1")
-        self.btn_zoom_1x.setToolTip(self.tr("One image pixel per screen pixel"))
-        for b in (self.btn_zoom_in, self.btn_zoom_out, self.btn_zoom_fit, self.btn_zoom_1x):
-            try: b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            except Exception: pass
-
-        self.btn_zoom_in.clicked.connect(self.view.zoom_in)
-        self.btn_zoom_out.clicked.connect(self.view.zoom_out)
-        self.btn_zoom_fit.clicked.connect(lambda: self.view.fit_to_item(self.pix))
-        self.btn_zoom_1x.clicked.connect(self._zoom_actual)
-
-        z.addWidget(self.btn_zoom_in); z.addWidget(self.btn_zoom_out)
-        z.addWidget(self.btn_zoom_fit); z.addWidget(self.btn_zoom_1x)
         v.addLayout(z)
 
         self._sync_split_visibility()
@@ -1047,7 +1034,7 @@ class CLAHEDialogPro(QDialog):
 
     def _refresh_zoom_label(self):
         try:
-            self.lbl_zoom.setText(f"{self._view_scale() * 100.0:.0f}%")
+            self.zoom_bar.refresh()
             want = (Qt.TransformationMode.SmoothTransformation if self._view_scale() < 0.999
                     else Qt.TransformationMode.FastTransformation)
             if self.pix.transformationMode() != want:
@@ -1060,7 +1047,9 @@ class CLAHEDialogPro(QDialog):
         # The scene is in image coordinates, so identity == one image pixel per
         # screen pixel whatever the preview is currently rendered at.
         try:
-            self.view.resetTransform()
+            center = self.view.mapToScene(self.view.viewport().rect().center())
+            self.view.reset_zoom()
+            self.view.centerOn(center)
             self._refresh_zoom_label()
         except Exception:
             pass

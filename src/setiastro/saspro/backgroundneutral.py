@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 from setiastro.saspro.imageops.stretch import stretch_color_image
 # Shared utilities
 from setiastro.saspro.widgets.image_utils import extract_mask_from_document as _active_mask_array_from_doc
-from setiastro.saspro.widgets.themed_buttons import themed_toolbtn
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 
 
 
@@ -391,20 +391,13 @@ class BackgroundNeutralizationDialog(QDialog):
         btn_row.addWidget(self.btn_find_bg)
         layout.addLayout(btn_row)
 
-        # Zoom row
-        # Zoom row (standardized themed toolbuttons)
-        zoom_row = QHBoxLayout()
-
-        self.btn_zoom_out = themed_toolbtn("zoom-out", "Zoom Out")
-        self.btn_fit      = themed_toolbtn("zoom-fit-best", "Fit to View")
-        self.btn_zoom_in  = themed_toolbtn("zoom-in", "Zoom In")
-
-        zoom_row.addWidget(self.btn_zoom_out)
-        zoom_row.addWidget(self.btn_fit)
-        zoom_row.addWidget(self.btn_zoom_in)
-        zoom_row.addStretch(1)  # optional: keeps them left-aligned
-
-        layout.addLayout(zoom_row)
+        self.zoom_bar = PreviewZoomBar(
+            self, self.graphics_view.viewport(), zoom_in=self.zoom_in,
+            zoom_out=self.zoom_out, actual=self._zoom_actual,
+            fit=self.fit_to_view,
+            scale=lambda: self.graphics_view.transform().m11(),
+        )
+        layout.insertWidget(2, self.zoom_bar)
 
         # --- preset drag handle (grip) ---
         try:
@@ -439,9 +432,7 @@ class BackgroundNeutralizationDialog(QDialog):
         self.btn_cancel.clicked.connect(self.close)
         self.btn_toggle_stretch.clicked.connect(self._toggle_auto_stretch)
         self.btn_find_bg.clicked.connect(self._on_find_background)
-        self.btn_zoom_out.clicked.connect(self.zoom_out)
-        self.btn_fit.clicked.connect(self.fit_to_view)
-        self.btn_zoom_in.clicked.connect(self.zoom_in)        
+
 
         self.graphics_view.viewport().installEventFilter(self)
         self.origin_scene = QPointF()
@@ -831,15 +822,27 @@ class BackgroundNeutralizationDialog(QDialog):
         self._user_zoomed = True
         cur = self.graphics_view.transform().m11()
         new_scale = cur * factor
-        if new_scale < 0.01 or new_scale > 100.0:
+        if new_scale < 1e-6 or new_scale > 8.0:
             return
+        center = self.graphics_view.mapToScene(
+            self.graphics_view.viewport().rect().center()
+        )
         self.graphics_view.scale(factor, factor)
+        self.graphics_view.centerOn(center)
 
     def zoom_in(self):
         self._zoom(1.25)
 
     def zoom_out(self):
         self._zoom(0.8)
+
+    def _zoom_actual(self):
+        self._user_zoomed = True
+        center = self.graphics_view.mapToScene(
+            self.graphics_view.viewport().rect().center()
+        )
+        self.graphics_view.resetTransform()
+        self.graphics_view.centerOn(center)
 
     def fit_to_view(self):
         self._user_zoomed = False

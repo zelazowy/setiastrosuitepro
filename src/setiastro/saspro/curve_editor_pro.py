@@ -19,7 +19,7 @@ from PyQt6.QtGui import (
     QPixmap, QImage, QWheelEvent, QPainter, QPainterPath, QPen, QColor, QBrush,
     QIcon, QKeyEvent, QCursor, QFont, QLinearGradient
 )
-from setiastro.saspro.widgets.themed_buttons import themed_toolbtn
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 
 from setiastro.saspro.widgets.image_utils import float_to_qimage_rgb8 as _float_to_qimage_rgb8
 
@@ -1686,6 +1686,7 @@ class CurvesDialogPro(QDialog):
         self._full_img     = None
         self._pix          = None
         self._zoom         = 0.25
+        self._detail_preview = False
         self._panning      = False
         self._pan_start    = QPointF()
         self._did_initial_fit  = False
@@ -1909,16 +1910,6 @@ class CurvesDialogPro(QDialog):
         self._popout_placeholder.setVisible(False)
 
         right = QVBoxLayout()
-        zoombar = QHBoxLayout()
-        zoombar.addStretch(1)
-        self.btn_zoom_out = themed_toolbtn("zoom-out",      self.tr("Zoom Out"))
-        self.btn_zoom_in  = themed_toolbtn("zoom-in",       self.tr("Zoom In"))
-        self.btn_zoom_fit = themed_toolbtn("zoom-fit-best", self.tr("Fit to Preview"))
-        zoombar.addWidget(self.btn_zoom_out)
-        zoombar.addWidget(self.btn_zoom_in)
-        zoombar.addWidget(self.btn_zoom_fit)
-        right.addLayout(zoombar)
-
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1929,6 +1920,14 @@ class CurvesDialogPro(QDialog):
         self.label.installEventFilter(self)
         self.scroll.setWidget(self.label)
         right.addWidget(self.scroll, 1)
+        self.zoom_bar = PreviewZoomBar(
+            self, self.scroll.viewport(),
+            zoom_in=lambda: self._set_zoom(self._zoom * 1.25),
+            zoom_out=lambda: self._set_zoom(self._zoom / 1.25),
+            actual=self._zoom_actual, fit=self._fit,
+            scale=self._source_zoom, reduced=self._reduced_preview,
+        )
+        right.addWidget(self.zoom_bar)
         top.addLayout(right, 1)
         main.addLayout(top, 1)
 
@@ -1955,9 +1954,6 @@ class CurvesDialogPro(QDialog):
         self.btn_apply.clicked.connect(self._apply)
         self.btn_undo.clicked.connect(self._undo_curves_apply)
         self.btn_reset.clicked.connect(self._reset_curve)
-        self.btn_zoom_out.clicked.connect(lambda: self._set_zoom(self._zoom / 1.25))
-        self.btn_zoom_in.clicked.connect(lambda: self._set_zoom(self._zoom * 1.25))
-        self.btn_zoom_fit.clicked.connect(self._fit)
 
         self._bind_undo_document(self.doc)
         self.editor.setPreviewCallback(self._on_editor_curve_changed)
@@ -2043,8 +2039,8 @@ class CurvesDialogPro(QDialog):
     def _rebuild_preview_from_curve_debounced(self):
         if self._preview_orig is None and self._preview_img is None:
             return
-        # The full-resolution result is optional; keep preview inexpensive.
-        if self._full_bg_enabled:
+        # Full resolution is needed for detail view or explicit precomputation.
+        if self._full_bg_enabled or self._detail_preview:
             self._schedule_full_bg()
         if not getattr(self, "btn_preview", None) or not self.btn_preview.isChecked():
             return
@@ -2418,7 +2414,7 @@ class CurvesDialogPro(QDialog):
             return 0.5, 0.5, float(self._zoom)
 
     def _restore_view(self, fx, fy, zoom):
-        self._set_zoom(zoom)
+        self._set_zoom(zoom, keep_center=False)
         vp = self.scroll.viewport()
         h  = self.scroll.horizontalScrollBar()
         v  = self.scroll.verticalScrollBar()
@@ -2562,7 +2558,7 @@ class CurvesDialogPro(QDialog):
             self.hist.clearValueLines()
             self._set_status("")
             return
-        img = self._preview_img
+        img = self._cursor_image()
         H, W = img.shape[:2]
         try:
             ix, iy = mapped
@@ -2629,7 +2625,7 @@ class CurvesDialogPro(QDialog):
         py = float(y) - float(off_y)
         if px < 0 or py < 0 or px >= disp_w or py >= disp_h:
             return None
-        src_w = self._pix.width(); src_h = self._pix.height()
+        src_h, src_w = self._cursor_image().shape[:2]
         if src_w <= 0 or src_h <= 0:
             return None
         ix = int(px / (disp_w / float(src_w)))
@@ -2931,8 +2927,8 @@ class CurvesDialogPro(QDialog):
         proc = self._apply_all_curves_once(self._preview_img, luts)
         proc = self._blend_with_mask(proc)
         self._preview_proc = proc
-        # Full-frame precomputation is opt-in, not part of the preview.
-        if self._full_bg_enabled:
+        # Keep fit previews cheap; detail view requests full resolution.
+        if self._full_bg_enabled or self._detail_preview:
             self._schedule_full_bg(luts)
         if self._show_proc:
             self._update_preview_pix(self._preview_proc)
@@ -2995,7 +2991,7 @@ class CurvesDialogPro(QDialog):
     def _toggle_full_background(self, enabled):
         self._full_bg_enabled = bool(enabled)
         QSettings().setValue('curves/full_resolution_background', self._full_bg_enabled)
-        if self._full_bg_enabled:
+        if self._full_bg_enabled or self._detail_preview:
             self._schedule_full_bg()
         else:
             # Ignore results from an in-flight worker, without destroying its QThread.
@@ -3006,7 +3002,8 @@ class CurvesDialogPro(QDialog):
         """Warm the full-res cache in the background for the current state.
         No-op if already cached/in-flight for this signature. Coalesces churn:
         only one worker runs at a time; the latest request wins."""
-        if (self._full_img is None or not self._full_bg_enabled
+        if (self._full_img is None
+                or not (self._full_bg_enabled or self._detail_preview)
                 or getattr(self, '_memory_released', False)):
             return
         self._flush_active_into_store()
@@ -3066,7 +3063,8 @@ class CurvesDialogPro(QDialog):
             current = self._full_result_signature()
         except Exception:
             current = None
-        if (not self._full_bg_enabled or getattr(self, '_memory_released', False)
+        if (not (self._full_bg_enabled or self._detail_preview)
+                or getattr(self, '_memory_released', False)
                 or current is None or sig != current):
             return
         try:
@@ -3075,13 +3073,15 @@ class CurvesDialogPro(QDialog):
             return
         self._full_cache = blended
         self._full_cache_sig = sig
+        if self._detail_preview:
+            self._update_preview_pix(blended)
 
     def _run_preview(self):
         # The manual Preview control now just warms the same background cache
         # through the safe (signature-checked) pipeline.
         if self._full_img is None:
             return
-        if self._full_bg_enabled:
+        if self._full_bg_enabled or self._detail_preview:
             self._schedule_full_bg()
 
     def _on_preview_ready(self, out01):
@@ -3300,15 +3300,22 @@ class CurvesDialogPro(QDialog):
         self._set_bg_status(self.tr("Full resolution ready") if fresh else "")
 
     def _update_preview_pix(self, img01, preserve_view=True):
+        if self._detail_preview:
+            if not self._show_proc:
+                img01 = self._full_img
+            elif (self._full_cache is not None and self._full_cache_sig
+                  == self._full_result_signature()):
+                img01 = self._full_cache
         if img01 is None:
             self.label.clear(); self._pix = None; return
         state = self._capture_view() if preserve_view else None
         qimg  = _float_to_qimage_rgb8(img01)
         pm    = QPixmap.fromImage(qimg)
+        old_width = self._pix.width() if self._pix is not None else pm.width()
         self._pix = pm
         if preserve_view and state is not None:
             fx,fy,zoom = state
-            self._restore_view(fx,fy,zoom)
+            self._restore_view(fx, fy, zoom * old_width / pm.width())
         else:
             self._apply_zoom()
             if not self._did_initial_fit:
@@ -3456,16 +3463,65 @@ class CurvesDialogPro(QDialog):
         self.label.setPixmap(scaled)
         self.label.resize(scaled.size())
 
-    def _set_zoom(self, z):
-        self._zoom = float(max(0.05, min(z, 8.0)))
+    def _preview_ratio(self):
+        if self._pix is None or self._full_img is None:
+            return 1.0
+        return self._pix.width() / self._full_img.shape[1]
+
+    def _source_zoom(self):
+        return self._zoom * self._preview_ratio()
+
+    def _reduced_preview(self):
+        return self._preview_ratio() < 0.999
+
+    def _zoom_actual(self):
+        if self._full_img is None or self._pix is None:
+            return
+        self._detail_preview = True
+        if not self._show_proc:
+            self._update_preview_pix(self._full_img)
+        else:
+            self._schedule_full_bg()
+            self._update_preview_pix(self._preview_proc)
+        self._set_zoom(1.0 / self._preview_ratio())
+
+    def _set_zoom(self, z, keep_center=True):
+        state = self._capture_view() if keep_center else None
+        self._zoom = float(max(1e-6, min(z, 8.0 / self._preview_ratio())))
+        if (not self._detail_preview and self._source_zoom() >= 1.0
+                and self._reduced_preview()):
+            self._detail_preview = True
+            self._schedule_full_bg()
         self._apply_zoom()
+        if state is not None:
+            fx, fy, _ = state
+            vp = self.scroll.viewport()
+            self.scroll.horizontalScrollBar().setValue(
+                round(fx * self.label.width() - vp.width() / 2)
+            )
+            self.scroll.verticalScrollBar().setValue(
+                round(fy * self.label.height() - vp.height() / 2)
+            )
 
     def _fit(self):
-        if self._pix is None: return
+        if self._pix is None:
+            return
+        if self._detail_preview:
+            self._detail_preview = False
+            if not self._full_bg_enabled:
+                self._invalidate_full_cache()
+            image = (self._preview_proc if self._show_proc
+                     else self._preview_orig)
+            self._update_preview_pix(image)
         vp = self.scroll.viewport().size()
-        if self._pix.width()==0 or self._pix.height()==0: return
-        s = min(vp.width()/self._pix.width(), vp.height()/self._pix.height())
-        self._set_zoom(max(0.05, s))
+        if self._pix.width() == 0 or self._pix.height() == 0:
+            return
+        scale = min(vp.width() / self._pix.width(),
+                    vp.height() / self._pix.height())
+        self._set_zoom(scale)
+
+    def _cursor_image(self):
+        return self._full_img if self._detail_preview else self._preview_img
 
     def eventFilter(self, obj, ev):
         if obj is self.scroll.viewport():
@@ -3514,11 +3570,11 @@ class CurvesDialogPro(QDialog):
                 if self._preview_img is None or self._pix is None:
                     return False
                 pos = self.label.mapFrom(self.scroll.viewport(), ev.pos())
-                ix  = int(pos.x() / max(self._zoom, 1e-6))
-                iy  = int(pos.y() / max(self._zoom, 1e-6))
-                ix  = max(0, min(self._pix.width()-1,  ix))
-                iy  = max(0, min(self._pix.height()-1, iy))
-                img = self._preview_img
+                mapped = self._map_label_xy_to_image_ij(pos.x(), pos.y())
+                if mapped is None:
+                    return True
+                ix, iy = mapped
+                img = self._cursor_image()
                 rgb = self._pixel_rgb(img, ix, iy)
                 if rgb is None:
                     return True
@@ -3540,7 +3596,7 @@ class CurvesDialogPro(QDialog):
             if not mapped or self._preview_img is None:
                 return False
             ix,iy  = mapped
-            img    = self._preview_img
+            img = self._cursor_image()
             rgb    = self._pixel_rgb(img, ix, iy)
             if rgb is None: return True
             # Place the point on the ACTIVE channel's axis. On a*/b*/Chroma/

@@ -418,6 +418,22 @@ pip install -e .
 python setiastrosuitepro.py
 ```
 
+### Preview Zoom
+
+Curves, CLAHE, Statistical Stretch, Background Neutralization and ADBE share
+zoom controls below the image preview: zoom out, zoom in, 100%, Fit and the
+current percentage. Use Command on macOS or Ctrl on Windows/Linux:
+
+- `0`: fit the whole image to the preview; refit when the preview is resized.
+- `1`: actual size, following the main image viewer's logical-pixel convention.
+- `+` / `-`: zoom in/out around the viewport centre (`=` also zooms in).
+
+Manual zoom is preserved when resizing the tool. Shortcuts target the tool
+receiving keyboard input, including when a parameter field has focus.
+Percentages use source-image dimensions. A reduced render is explicitly marked
+until full-resolution detail is available; Curves requests its existing
+background full-resolution calculation when inspecting details.
+
 ## Dependency Management
 
 This project uses [Poetry](https://python-poetry.org/) as its authoritative dependency management tool. The `pyproject.toml` file defines all runtime and development dependencies. The `requirements.txt` file is a derived artifact generated from `pyproject.toml` to ensure compatibility with standard `pip`-based workflows.
