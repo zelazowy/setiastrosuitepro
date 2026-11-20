@@ -1,5 +1,6 @@
 #saspro/perfect_palette_picker.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import os
 import numpy as np
 from PIL import Image
@@ -118,6 +119,20 @@ class PaletteAdjustDialog(QDialog):
         vlayout.addLayout(btns)
 
         self._update_preview()
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.preview_area.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_fit,
+            },
+            actual=lambda: self._change_zoom(
+                1.0 / max(self.zoom_factor, 1e-09),
+            ),
+            scale=lambda: self.zoom_factor,
+        )
 
     def _on_slider_change(self, _):
         self.ha_factor   = self._ha_slider.value()/100.0
@@ -531,6 +546,18 @@ class PerfectPalettePicker(QWidget):
         self.chk_linear.stateChanged.connect(lambda *_: self._save_ui_state())
         self.setLayout(root)
         self.setMinimumSize(left_host.width() + 480, 560)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_fit,
+            },
+            actual=lambda: self._zoom_at(1.0 / max(self._zoom, 1e-09)),
+            scale=lambda: self._zoom,
+        )
 
     def _resize_to(self, arr: np.ndarray | None, size: tuple[int, int]) -> np.ndarray | None:
         """Resize np array to (w,h). Keeps dtype/scale. Uses INTER_AREA for downsizing."""

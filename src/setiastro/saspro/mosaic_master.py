@@ -14,6 +14,7 @@ backward-compat __getattr__ shim in that module.
 """
 from __future__ import annotations
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import os
 import sys
 import math
@@ -507,6 +508,21 @@ class MosaicPreviewWindow(QDialog):
         self.setLayout(layout)
         # Finally, display the initial image
         self.display_image(self.image_array)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll_area.viewport(),
+            buttons={
+                'out': self.zoom_out_button,
+                'in': self.zoom_in_button,
+                'fit': self.fit_button,
+            },
+            actual=lambda: (
+                setattr(self, 'zoom_factor', 1.0),
+                self.display_image(self.image_array),
+            ),
+            scale=lambda: self.zoom_factor,
+        )
 
     def display_image(self, arr):
         """

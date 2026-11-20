@@ -1,5 +1,6 @@
 #saspro.stacking_suite.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import os
 import glob
 import shutil
@@ -3014,7 +3015,21 @@ class ReferenceFrameReviewDialog(QDialog):
         main_layout.addLayout(button_layout)
         self.setLayout(main_layout)
         self.zoomIn()
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scrollArea.viewport(),
+            buttons={'in': self.zoomInButton, 'out': self.zoomOutButton},
+            actual=lambda: self._set_actual_size(),
+            fit=self.fitToPreview,
+            scale=lambda: self.zoom_factor,
+        )
     
+    def _set_actual_size(self):
+        self.zoom_factor = 1.0
+        if self.current_preview_image is not None:
+            self.updatePreview(self.current_preview_image)
+
     def _ensure_hwc(self, x: np.ndarray) -> np.ndarray:
         """Ensure HWC for RGB, HW for mono."""
         if x is None:
@@ -3874,6 +3889,18 @@ class _SimplePickDialog(QDialog):
         # click to place marker
         self.view.mousePressOnScene = self._on_scene_click
         self.view.viewport().installEventFilter(self)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={
+                'out': self.btn_zo,
+                'in': self.btn_zi,
+                'fit': self.btn_fit,
+                'actual': self.btn_1x,
+            },
+            scale=lambda: abs(self.view.transform().m11()),
+        )
 
     def eventFilter(self, obj, ev):
         if obj is self.view.viewport():
@@ -6949,6 +6976,7 @@ class SplitPreviewWidget(QWidget):
         self._dragging_split = False
 
         # zoom / pan state
+        self._fit_mode = True
         self._zoom    = 1.0
         self._offset  = QPoint(0, 0)   # top-left corner of the image in widget coords
         self._panning = False
@@ -6972,6 +7000,7 @@ class SplitPreviewWidget(QWidget):
         """Fit the image to the widget, centered."""
         if self._before is None:
             return
+        self._fit_mode = True
         iw, ih   = self._before.width(), self._before.height()
         ww, wh   = self.width(), self.height()
         if ww <= 0 or wh <= 0 or iw <= 0 or ih <= 0:
@@ -6984,6 +7013,7 @@ class SplitPreviewWidget(QWidget):
 
     def _zoom_by(self, factor: float, anchor: QPoint):
         """Zoom keeping the image point under `anchor` (widget coords) fixed."""
+        self._fit_mode = False
         old  = self._zoom
         new  = max(0.05, min(16.0, old * factor))
         if abs(new - old) < 1e-6:
@@ -7003,6 +7033,7 @@ class SplitPreviewWidget(QWidget):
         self.update()
 
     def zoom_100(self):
+        self._fit_mode = False
         if self._before is None:
             return
         iw, ih   = self._before.width(), self._before.height()
@@ -7111,7 +7142,7 @@ class SplitPreviewWidget(QWidget):
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
         # on first show / resize, re-fit
-        if self._before is not None and self._zoom == 1.0:
+        if self._before is not None and self._fit_mode:
             self._fit()
 
 
@@ -8009,6 +8040,21 @@ class FlatStrengthPreviewDialog(QDialog):
         root.addLayout(btn_row)
 
         self.resize(1100, 720)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.split_view,
+            buttons={'fit': btn_fit, 'actual': btn_1_1},
+            zoom_in=lambda: self.split_view._zoom_by(
+                1.25,
+                self.split_view.rect().center(),
+            ),
+            zoom_out=lambda: self.split_view._zoom_by(
+                0.8,
+                self.split_view.rect().center(),
+            ),
+            scale=lambda: self.split_view._zoom,
+        )
 
     # ------------------------------------------------------------------
     def _fit(self):

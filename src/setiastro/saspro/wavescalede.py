@@ -1,5 +1,6 @@
 #saspro/wavescalede.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import math
 import numpy as np
 
@@ -352,6 +353,18 @@ class WaveScaleDarkEnhancerDialogPro(QDialog):
         # init preview & initial mask
         self._set_pix(self.preview)
         self._update_mask_only()
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={
+                'out': self.btn_zout,
+                'in': self.btn_zin,
+                'fit': self.btn_fit,
+            },
+            actual=self.view.reset_zoom,
+            scale=lambda: abs(self.view.transform().m11()),
+        )
 
     def _combine_with_doc_mask(self, op_mask: np.ndarray | None) -> np.ndarray | None:
         doc_m = self._get_doc_active_mask_2d()

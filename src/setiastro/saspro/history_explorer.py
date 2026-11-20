@@ -1,4 +1,5 @@
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 from PyQt6.QtCore import Qt, QSize, QPointF, QEvent, QMimeData
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QPushButton, QLabel,
@@ -969,6 +970,15 @@ class HistoryImagePreview(QWidget):
         self._rebuild_source()
         self._fit_to_view()
 
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll.viewport(),
+            buttons={'fit': self.btn_fit, 'actual': self.btn_1to1},
+            zoom_in=lambda: self._set_zoom(self.zoom * 1.25),
+            zoom_out=lambda: self._set_zoom(self.zoom / 1.25),
+            scale=lambda: self.zoom,
+        )
+
     # data → qimage
     def _make_vis(self) -> np.ndarray:
         f = _to_float01(self.image_data)
@@ -1063,6 +1073,13 @@ class HistoryImagePreview(QWidget):
         mw = self._find_main_window()
         if mw and hasattr(mw, "_log"):
             mw._log("History: opened Compare with Current.")
+
+        win.zoom_bar = PreviewZoomBar.replace(
+            win,
+            self.slider_widget,
+            buttons={'out': b_out, 'in': b_in, 'fit': b_fit, 'actual': b_1},
+            scale=lambda: self.slider_widget.zoom,
+        )
 
     def _restore(self):
         try:

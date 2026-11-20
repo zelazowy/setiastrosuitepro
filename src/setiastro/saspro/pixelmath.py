@@ -1,5 +1,6 @@
 #saspro/pixelmath.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import os
 import re
 import json
@@ -1002,7 +1003,10 @@ class _PreviewView(QGraphicsView):
         if ev.modifiers() & Qt.KeyboardModifier.ControlModifier:
             angle = ev.angleDelta().y()
             step = 1.25 if angle > 0 else 1/1.25
-            new_zoom = max(self._min_zoom, min(self._zoom * step, self._max_zoom))
+            self._zoom = abs(self.transform().m11())
+            new_zoom = max(
+                min(self._min_zoom, self._zoom / 1.25),
+                min(self._zoom * step, self._max_zoom))
             step = new_zoom / self._zoom  # clamp-aware step
             self._zoom = new_zoom
             self.scale(step, step)
@@ -1016,7 +1020,10 @@ class _PreviewView(QGraphicsView):
         self._zoom = 1.0
 
     def zoom_by(self, factor: float):
-        new_zoom = max(self._min_zoom, min(self._zoom * float(factor), self._max_zoom))
+        self._zoom = abs(self.transform().m11())
+        new_zoom = max(
+            min(self._min_zoom, self._zoom / 1.25),
+            min(self._zoom * float(factor), self._max_zoom))
         factor = new_zoom / self._zoom
         self._zoom = new_zoom
         self.scale(factor, factor)
@@ -1410,6 +1417,19 @@ class PixelMathDialogPro(QDialog):
         # A little wider to favor the preview
         self.resize(940, 700)
         QTimer.singleShot(0, lambda: self._splitter.setSizes([320, max(620, self.width() - 320)]))
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.preview_view.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_fit,
+                'actual': self.btn_zoom_1_1,
+            },
+            actual=self._zoom_reset_1_1,
+            scale=lambda: abs(self.preview_view.transform().m11()),
+        )
 
     # ─────────────── Auto-stretch prefs ───────────────
     def _as_settings(self):

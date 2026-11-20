@@ -1,5 +1,6 @@
 # saspro/pedestal.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar, preview_ratio
 import os
 import numpy as np
 
@@ -324,6 +325,21 @@ class RemovePedestalDialog(QDialog):
         self._update_preview_pix(self.doc.image if self.doc else None)
         self._schedule_preview()
 
+        def ratio():
+            return preview_ratio(
+                getattr(self, '_pix', None),
+                getattr(self.doc, 'image', None),
+            )
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll.viewport(),
+            buttons={'out': b_out, 'in': b_in, 'fit': b_fit},
+            actual=lambda: self._set_zoom(1.0 / ratio()),
+            scale=lambda: self._zoom * ratio(),
+            reduced=lambda: ratio() < 0.999,
+        )
+
     # --- mode label helper -------------------------------------------------
     def _mode_label(self, mode: str) -> str:
         lbl = MODE_LABELS.get(mode, mode)
@@ -606,10 +622,14 @@ class RemovePedestalDialog(QDialog):
         vp = self.scroll.viewport().size()
         if self._pix.width() == 0 or self._pix.height() == 0: return
         s = min(vp.width() / self._pix.width(), vp.height() / self._pix.height())
-        self._set_zoom(max(0.05, s))
+        self._set_zoom(max(1e-6, s))
 
     def _set_zoom(self, z: float):
-        self._zoom = float(max(0.05, min(z, 8.0)))
+        ratio = preview_ratio(
+            getattr(self, '_pix', None),
+            getattr(self.doc, 'image', None),
+        )
+        self._zoom = float(max(1e-6, min(z, 8.0 / ratio)))
         self._apply_zoom()
 
     # --- event filter (wheel zoom + panning) ------------------------------

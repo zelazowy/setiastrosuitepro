@@ -1,5 +1,6 @@
 #saspro/nbtorgb_stars.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import os
 import numpy as np
 
@@ -330,6 +331,18 @@ class NBtoRGBStars(QWidget):
         self.sld_sat.valueChanged.connect(lambda *_: None)
         self.setLayout(root)
         self.setMinimumSize(980, 640)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_fit,
+            },
+            actual=lambda: self._zoom_at(1.0 / max(self._zoom, 1e-09)),
+            scale=lambda: self._zoom,
+        )
 
     def _spinner_on(self, text: str = "Working…"):
         # optional: disable button to prevent re-entry

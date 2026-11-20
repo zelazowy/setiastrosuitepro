@@ -1,5 +1,6 @@
 #saspro/texture_clarity.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar, preview_ratio
 import numpy as np
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QPointF, QEvent, QSettings
@@ -441,16 +442,6 @@ class TextureClarityDialog(QDialog):
         # ── right: preview ────────────────────────────────────────────────────
         right = QVBoxLayout()
 
-        zoom_row = QHBoxLayout()
-        for label, slot in (("–", self._zoom_out), ("+", self._zoom_in),
-                             ("Fit", self._fit)):
-            b = QPushButton(label)
-            b.setFixedWidth(44)
-            b.clicked.connect(slot)
-            zoom_row.addWidget(b)
-        zoom_row.addStretch(1)
-        right.addLayout(zoom_row)
-
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -480,6 +471,24 @@ class TextureClarityDialog(QDialog):
         self.sl_mask.valueChanged.connect(
             lambda v: self._param_changed(self.lbl_mask,
                 f"Midtone strength: {v/100:.2f}  (1=midtones only, 0=everywhere)"))
+
+        def ratio():
+            return preview_ratio(
+                getattr(self, '_pix_original', None),
+                getattr(self.doc, 'image', None),
+            )
+
+        self.zoom_bar = PreviewZoomBar(
+            self,
+            self.scroll.viewport(),
+            zoom_in=self._zoom_in,
+            zoom_out=self._zoom_out,
+            actual=lambda: self._set_zoom(1.0 / ratio()),
+            fit=self._fit,
+            scale=lambda: self._zoom * ratio(),
+            reduced=lambda: ratio() < 0.999,
+        )
+        right.insertWidget(1, self.zoom_bar)
 
     # ── param change ──────────────────────────────────────────────────────────
 
@@ -710,7 +719,11 @@ class TextureClarityDialog(QDialog):
         stationary. If anchor is None, uses viewport centre.
         """
         old_zoom = self._zoom
-        self._zoom = max(0.05, min(z, 5.0))
+        ratio = preview_ratio(
+            self._pix_original,
+            getattr(self.doc, 'image', None),
+        )
+        self._zoom = max(1e-6, min(z, 8.0 / ratio))
 
         pix = (self._pix_original if self._showing_original
                else self._pix_processed)
@@ -752,7 +765,7 @@ class TextureClarityDialog(QDialog):
         vp = self.scroll.viewport().size()
         s  = min(vp.width() / pix.width(), vp.height() / pix.height())
         # fit uses centre anchor — _set_zoom defaults to centre when anchor=None
-        self._set_zoom(max(0.05, s))
+        self._set_zoom(max(1e-6, s))
 
     def eventFilter(self, obj, ev):
         if obj is self.scroll.viewport():

@@ -1,5 +1,6 @@
 # src/setiastro/saspro/multiscale_decomp.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import numpy as np
 import cv2
 import os
@@ -834,6 +835,18 @@ class MultiscaleDecompDialog(QDialog):
 
         # Connect viewport scroll changes
         self._connect_viewport_signals()
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={
+                'out': self.zoom_out_btn,
+                'in': self.zoom_in_btn,
+                'fit': self.fit_btn,
+                'actual': self.one_to_one_btn,
+            },
+            scale=lambda: abs(self.view.transform().m11()),
+        )
 
     # ---------- preset (grip / headless) ----------
     def _multiscale_params(self) -> dict:

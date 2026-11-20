@@ -1,5 +1,6 @@
 #saspro/halobgon.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import numpy as np
 import cv2
 from typing import Optional
@@ -238,7 +239,7 @@ class _PreviewView(QGraphicsView):
     def fit_to(self, rect: QRectF):
         if rect.isEmpty(): return
         self.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
-        self._zoom = 1.0
+        self._zoom = abs(self.transform().m11())
 
 class HaloBGonDialogPro(QDialog):
     """
@@ -365,6 +366,14 @@ class HaloBGonDialogPro(QDialog):
         self._set_pix(self._disp_base)
         self._update_preview()
         self.resize(900, 620)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={'out': b_minus, 'in': b_plus, 'fit': b_fit},
+            actual=lambda: self.view.set_zoom(1.0),
+            scale=lambda: abs(self.view.transform().m11()),
+        )
 
     def _debounce(self): self._timer.start(180)
 

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar, preview_ratio
 import numpy as np
 
 try:
@@ -955,6 +956,23 @@ class SelectiveColorCorrection(QDialog):
         # First paint
         self._update_preview_pixmap()
 
+        def ratio():
+            return preview_ratio(getattr(self, '_last_base', None), self.img)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'actual': self.btn_zoom_1,
+                'fit': self.btn_fit,
+            },
+            actual=lambda: self._apply_zoom(1.0 / ratio()),
+            scale=lambda: self._zoom * ratio(),
+            reduced=lambda: ratio() < 0.999,
+        )
+
     # --- Lasso helpers ---------------------------------------------------
     def _clear_region_mask(self):
         self._region_mask_full = None
@@ -1089,7 +1107,8 @@ class SelectiveColorCorrection(QDialog):
                         If None, use viewport center.
         """
         old_zoom = getattr(self, "_zoom", 1.0)
-        new_zoom = max(0.05, min(16.0, float(new_zoom)))
+        ratio = preview_ratio(getattr(self, "_last_base", None), self.img)
+        new_zoom = max(1e-6, min(16.0 / ratio, float(new_zoom)))
         if abs(new_zoom - old_zoom) < 1e-6:
             return
 

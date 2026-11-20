@@ -1,3 +1,4 @@
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import numpy as np
 import math
 from dataclasses import dataclass, field
@@ -1330,6 +1331,21 @@ class AstroSpikeWindow(QDialog):
             QScrollBar::handle:vertical { background: #424242; min-height: 20px; border-radius: 5px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
         """)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.canvas,
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_fit,
+            },
+            actual=lambda: (
+                setattr(self.canvas, 'scale', 1.0),
+                self.canvas.center_image(),
+            ),
+            scale=lambda: self.canvas.scale,
+        )
         
     def detect_stars(self):
         if self.image_data is None:

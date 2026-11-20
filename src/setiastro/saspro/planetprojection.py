@@ -1,6 +1,7 @@
 # src/setiastro/saspro/planetprojection.py
 from __future__ import annotations
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import numpy as np
 import os
 import tempfile, webbrowser
@@ -3245,8 +3246,8 @@ class PlanetDiskAdjustDialog(QDialog):
         zoom_row.addWidget(self.btn_zoom_in)
         outer.addLayout(zoom_row)
 
-        self.btn_zoom_out.clicked.connect(lambda: self._set_preview_zoom(self._preview_zoom * 0.8))
-        self.btn_zoom_in.clicked.connect(lambda: self._set_preview_zoom(self._preview_zoom * 1.25))
+        self.btn_zoom_out.clicked.connect(lambda: self._step_preview_zoom(0.8))
+        self.btn_zoom_in.clicked.connect(lambda: self._step_preview_zoom(1.25))
         self.btn_zoom_fit.clicked.connect(lambda: self._set_preview_zoom(1.0))
         self.btn_zoom_100.clicked.connect(lambda: self._set_preview_zoom(0.0))
 
@@ -3404,6 +3405,18 @@ class PlanetDiskAdjustDialog(QDialog):
         self.btn_ok.clicked.connect(self.accept)
         self.btn_cancel.clicked.connect(self.reject)
 
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.preview,
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'actual': self.btn_zoom_100,
+                'fit': self.btn_zoom_fit,
+            },
+            scale=lambda: getattr(self, '_scale', 1.0),
+        )
+
     # ---------- coordinate helpers ----------
     def _make_slider_spin_row(self, *,
                             min_v: float, max_v: float, step_v: float,
@@ -3499,7 +3512,8 @@ class PlanetDiskAdjustDialog(QDialog):
         # scale factor to fit image into label
         sw = pw / float(self.W)
         sh = ph / float(self.H)
-        self._scale = float(min(sw, sh))
+        manual = getattr(self, "_manual_preview_scale", None)
+        self._scale = float(min(sw, sh)) if manual is None else manual
 
         # the fitted draw size (in LABEL coords)
         draw_w = self.W * self._scale
@@ -3529,13 +3543,23 @@ class PlanetDiskAdjustDialog(QDialog):
         # pixmap coords (0..pix_w, 0..pix_h)
         return (x * self._pix_scale, y * self._pix_scale)
     
+    def _step_preview_zoom(self, factor):
+        self._manual_preview_scale = max(1e-6, min(8.0, self._scale * factor))
+        self._redraw()
+
     def _set_preview_zoom(self, z: float):
         if z < 0.05 and z != 0.0:
             z = 0.05
         if z > 8.0:
             z = 8.0
         self._preview_zoom = float(z)
-        # currently we always draw "fit"; keep behavior consistent by just redrawing
+        fit = min(self.preview.width() / self.W,
+                  self.preview.height() / self.H)
+        if z == 1.0:
+            self._manual_preview_scale = None
+        else:
+            self._manual_preview_scale = 1.0 if z == 0.0 else fit * z
+        # Display and overlay coordinates use the same transform.
         self._redraw()
 
 
@@ -3552,7 +3576,7 @@ class PlanetDiskAdjustDialog(QDialog):
             QImage.Format.Format_RGB888,
         )
         pix = QPixmap.fromImage(qimg).scaled(
-            self.preview.size(),
+            QSize(max(1, self._pix_w), max(1, self._pix_h)),
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
@@ -3910,8 +3934,8 @@ class PlanetProjectionPreviewDialog(QDialog):
         zoom_row.addWidget(self.btn_push)
         outer.addLayout(zoom_row)
 
-        self.btn_zoom_out.clicked.connect(lambda: self.set_zoom(self._preview_zoom * 0.8 if self._preview_zoom not in (0.0, 1.0) else 0.8))
-        self.btn_zoom_in.clicked.connect(lambda: self.set_zoom(self._preview_zoom * 1.25 if self._preview_zoom not in (0.0, 1.0) else 1.25))
+        self.btn_zoom_out.clicked.connect(lambda: self._step_display_zoom(.8))
+        self.btn_zoom_in.clicked.connect(lambda: self._step_display_zoom(1.25))
         self.btn_zoom_fit.clicked.connect(lambda: self.set_zoom(1.0))
         self.btn_zoom_100.clicked.connect(lambda: self.set_zoom(0.0))
 
@@ -3942,18 +3966,60 @@ class PlanetProjectionPreviewDialog(QDialog):
         self.preview.installEventFilter(self)
         self._last_rgb8 = None
 
-    def set_zoom(self, z: float):
-        if z < 0.05 and z != 0.0:
-            z = 0.05
-        if z > 8.0:
-            z = 8.0
-        self._preview_zoom = float(z)
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.preview,
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'actual': self.btn_zoom_100,
+                'fit': self.btn_zoom_fit,
+            },
+            scale=lambda: self._display_scale(),
+        )
 
-        # IMPORTANT: redraw whichever mode we’re in
+    def _display_scale(self):
+        source = getattr(self, "_last_frame_u8", None)
+        pm = self.preview.pixmap()
+        if source is None or pm is None or pm.isNull():
+            return 1.0
+        return pm.width() / max(1, source.shape[1])
+
+    def _output_fit_scale(self):
+        width, height = getattr(self, '_output_size', (1, 1))
+        return min(self.preview.width() / max(1, width),
+                   self.preview.height() / max(1, height))
+
+    def _step_display_zoom(self, factor):
+        self._manual_display_scale = max(
+            1e-6, min(8.0, self._display_scale() * factor))
+        self._preview_zoom = (self._manual_display_scale
+                              / max(self._output_fit_scale(), 1e-9))
+        self._refresh_display_zoom()
+
+    def set_zoom(self, z: float):
+        self._preview_zoom = float(z)
+        self._manual_display_scale = (None if z == 1.0
+                                      else 1.0 if z == 0.0
+                                      else self._output_fit_scale() * z)
+        self._refresh_display_zoom()
+
+    def _refresh_display_zoom(self):
         if self._last_left8 is not None and self._last_right8 is not None:
-            self._redraw()  # stereo path uses _preview_zoom inside _render_stereo()
+            self._redraw()
         elif self._last_rgb8 is not None:
             self.set_frame_u8(self._last_rgb8)
+
+    def _show_output_pixmap(self, base):
+        self._output_size = (base.width(), base.height())
+        manual = getattr(self, '_manual_display_scale', None)
+        scale = self._output_fit_scale() if manual is None else manual
+        self.preview.setPixmap(base.scaled(
+            max(1, int(round(base.width() * scale))),
+            max(1, int(round(base.height() * scale))),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        ))
 
     def _fit_scaled_size(self, img_w: int, img_h: int) -> tuple[int, int]:
         pw = max(1, self.preview.width())
@@ -3989,25 +4055,7 @@ class PlanetProjectionPreviewDialog(QDialog):
         qimg = QImage(ptr, w, h, bytes_per_line, QImage.Format.Format_RGB888)
         base = QPixmap.fromImage(qimg)
 
-        # NOTE: from this point onward, use disp8 dimensions (not rgb8)
-        if self._preview_zoom == 1.0:
-            self.preview.setPixmap(base)  # already fit-with-aspect (letterboxed by QLabel alignment)
-            return
-
-        if self._preview_zoom == 0.0:
-            self.preview.setPixmap(base)
-            return
-
-        fit_w, fit_h = self._fit_scaled_size(w, h)
-        target_w = max(1, int(round(fit_w * self._preview_zoom)))
-        target_h = max(1, int(round(fit_h * self._preview_zoom)))
-
-        pix = base.scaled(
-            QSize(target_w, target_h),
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        self.preview.setPixmap(pix)
+        self._show_output_pixmap(base)
 
     def set_stereo_u8(self, left8: np.ndarray, right8: np.ndarray, *, swap_eyes: bool, gap_px: int = 16):
         self._last_left8 = np.asarray(left8)
@@ -4077,23 +4125,7 @@ class PlanetProjectionPreviewDialog(QDialog):
         qimg = QImage(ptr, w, h, int(canvas.strides[0]), QImage.Format.Format_RGB888)
         base = QPixmap.fromImage(qimg)
 
-        # preview zoom (same as before)
-        if self._preview_zoom == 1.0:
-            pix = base.scaled(self.preview.size(), Qt.AspectRatioMode.KeepAspectRatio,
-                            Qt.TransformationMode.SmoothTransformation)
-            self.preview.setPixmap(pix)
-            return
-        if self._preview_zoom == 0.0:
-            self.preview.setPixmap(base)
-            return
-
-        fit_w, fit_h = self._fit_scaled_size(w, h)
-        target_w = max(1, int(round(fit_w * self._preview_zoom)))
-        target_h = max(1, int(round(fit_h * self._preview_zoom)))
-        pix = base.scaled(QSize(target_w, target_h), Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation)
-        self.preview.setPixmap(pix)
-
+        self._show_output_pixmap(base)
 
     def _ensure_rgb8(self, img: np.ndarray) -> np.ndarray:
         x = np.asarray(img)

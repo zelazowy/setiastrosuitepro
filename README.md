@@ -420,19 +420,28 @@ python setiastrosuitepro.py
 
 ### Preview Zoom
 
-Curves, CLAHE, Statistical Stretch, Background Neutralization and ADBE share
-zoom controls below the image preview: zoom out, zoom in, 100%, Fit and the
-current percentage. Use Command on macOS or Ctrl on Windows/Linux:
+Image previews throughout the processing, inspection and stacking tools share
+zoom out, zoom in, 100%, Fit and a current-percentage readout. This includes
+stretching, color adjustments, detail tools, masks, image comparisons, planetary
+previews and the reusable image-preview dialog. Use Command on macOS or Ctrl
+on Windows/Linux:
 
 - `0`: fit the whole image to the preview; refit when the preview is resized.
 - `1`: actual size, following the main image viewer's logical-pixel convention.
-- `+` / `-`: zoom in/out around the viewport centre (`=` also zooms in).
+- `+` / `-`: zoom in/out (`=` also zooms in).
 
 Manual zoom is preserved when resizing the tool. Shortcuts target the tool
 receiving keyboard input, including when a parameter field has focus.
-Percentages use source-image dimensions. A reduced render is explicitly marked
-until full-resolution detail is available; Curves requests its existing
-background full-resolution calculation when inspecting details.
+Percentages use source-image dimensions. Reduced renders are explicitly marked; 100% still uses the original image dimensions.
+Curves requests its existing background full-resolution calculation when
+inspecting details. Projection preview percentages refer to the rendered output
+canvas; its camera pan/zoom controls remain separate. Plot, workflow-graph and
+3D-map navigation retain their own controls.
+
+New previews can use `widgets.preview_zoom.PreviewZoomBar` with explicit renderer
+callbacks and a source-scale callback. `PreviewZoomBar.replace()` adopts legacy
+buttons, preserving their existing signals and enabled states. Linked previews
+can register an additional viewport with `watch_viewport()`.
 
 ## Dependency Management
 

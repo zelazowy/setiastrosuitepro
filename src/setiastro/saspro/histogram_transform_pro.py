@@ -1,6 +1,7 @@
 # src/setiastro/saspro/histogram_transform_pro.py
 from __future__ import annotations
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar, preview_ratio
 import numpy as np
 
 from PyQt6.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QCursor, QIcon
@@ -709,6 +710,27 @@ class HistogramTransformDialogPro(QDialog):
         # initial
         self.resize(1100, 720)
 
+        def ratio():
+            return preview_ratio(
+                getattr(self, '_preview_base', None),
+                self._base,
+            )
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_fit,
+            },
+            actual=lambda: self._zoom_at(
+                1.0 / max(self._zoom * ratio(), 1e-09),
+            ),
+            scale=lambda: self._zoom * ratio(),
+            reduced=lambda: ratio() < 0.999,
+        )
+
     def _on_curve_drag(self, black: float, mid: float, white: float):
         """Called when user drags a handle on the CurveWidget."""
         for w in (self.sp_black, self.sp_mid, self.sp_white,
@@ -1094,7 +1116,9 @@ class HistogramTransformDialogPro(QDialog):
         self.lbl_preview.resize(scaled.size())
 
     def _zoom_at(self, factor: float):
-        self._zoom = max(self._min_zoom, min(self._max_zoom, self._zoom * float(factor)))
+        ratio = preview_ratio(self._preview_base, self._base)
+        self._zoom = max(
+            1e-6, min(self._max_zoom / ratio, self._zoom * float(factor)))
         self._apply_zoom()
 
     def _fit_to_preview(self):
@@ -1105,7 +1129,7 @@ class HistogramTransformDialogPro(QDialog):
         if pm.width() <= 0 or pm.height() <= 0:
             return
         k = min(vp.width() / pm.width(), vp.height() / pm.height())
-        self._zoom = max(self._min_zoom, min(self._max_zoom, float(k)))
+        self._zoom = max(1e-6, float(k))
         self._apply_zoom()
 
     def eventFilter(self, obj, ev):

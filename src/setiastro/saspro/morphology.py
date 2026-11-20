@@ -1,5 +1,6 @@
 #saspro/morphology.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import numpy as np
 import cv2
 
@@ -205,6 +206,14 @@ class MorphologyDialogPro(QDialog):
         self._update_preview()
         # initial fit
         self.view.fit_to_item(self.pix)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={'out': btn_out, 'in': btn_in, 'fit': btn_fit},
+            actual=self.view.reset_zoom,
+            scale=lambda: abs(self.view.transform().m11()),
+        )
 
     def _debounce(self): self._timer.start(200)
 

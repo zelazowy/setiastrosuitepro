@@ -1,5 +1,6 @@
 #saspro/image_peeker_pro.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import os
 import math
 import re
@@ -120,6 +121,18 @@ class PreviewPane(QWidget):
 
         self.fit_to_view()
 
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll_area.viewport(),
+            buttons={
+                'out': self.zoom_out_btn,
+                'in': self.zoom_in_btn,
+                'fit': self.fit_btn,
+            },
+            actual=lambda: self._set_preview_zoom(1.0),
+            scale=lambda: self.zoom_factor,
+        )
+
     def load_qimage(self, img: QImage, source_float: np.ndarray | None = None):
         """
         (Re)load a fresh image. If `source_float` is provided (H×W or H×W×3,
@@ -232,12 +245,17 @@ class PreviewPane(QWidget):
             raise ValueError(f"Cannot convert array of shape {arr.shape} to QImage")
 
     def on_zoom_changed(self, val):
-        self.zoom_factor = val/100
+        self._set_preview_zoom(val / 100.0)
+
+    def _set_preview_zoom(self, scale):
+        self.zoom_factor = max(1e-6, min(4.0, scale))
+        blocked = self.zoom_slider.blockSignals(True)
+        self.zoom_slider.setValue(int(round(self.zoom_factor * 100)))
+        self.zoom_slider.blockSignals(blocked)
         self._update_display()
 
     def adjust_zoom(self, delta):
-        v = self.zoom_slider.value() + delta
-        self.zoom_slider.setValue(min(max(v,1),400))
+        self._set_preview_zoom(self.zoom_factor + delta / 100.0)
 
     def fit_to_view(self):
         if not self.original_image:
@@ -245,9 +263,7 @@ class PreviewPane(QWidget):
         avail = self.scroll_area.viewport().size()
         iw, ih = self.original_image.width(), self.original_image.height()
         f = min(avail.width()/iw, avail.height()/ih)
-        self.zoom_factor = f
-        self.zoom_slider.setValue(int(f*100))
-        self._update_display()
+        self._set_preview_zoom(f)
 
     def _update_display(self):
         """

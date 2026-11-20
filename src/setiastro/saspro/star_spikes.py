@@ -1,5 +1,6 @@
 #saspro/tools/star_spikes.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import numpy as np
 import math
 from PyQt6.QtCore import Qt
@@ -251,6 +252,22 @@ class StarSpikesDialogPro(QDialog):
         # zoom state
         self._zoom = 1.0
         self._fit_mode = True  # start fitted
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_fit,
+            },
+            actual=lambda: (
+                setattr(self, '_fit_mode', False),
+                setattr(self, '_zoom', 1.0),
+                self._apply_zoom(),
+            ),
+            scale=lambda: abs(self.view.transform().m11()),
+        )
 
     def _toggle_pupil(self, jwst: bool):
         self.pupil_jwst.setText("JWST" if jwst else "Circular")
@@ -952,7 +969,7 @@ class StarSpikesDialogPro(QDialog):
             return
         if self._fit_mode:
             self._fit_mode = False
-            self._zoom = 1.0
+            self._zoom = abs(self.view.transform().m11())
         self._zoom = min(self._zoom * 1.25, 20.0)
         self._apply_zoom()
 
@@ -961,7 +978,7 @@ class StarSpikesDialogPro(QDialog):
             return
         if self._fit_mode:
             self._fit_mode = False
-            self._zoom = 1.0
+            self._zoom = abs(self.view.transform().m11())
         self._zoom = max(self._zoom / 1.25, 0.05)
         self._apply_zoom()
 

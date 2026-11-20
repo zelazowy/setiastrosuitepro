@@ -239,3 +239,100 @@ def test_tool_zoom_is_source_scaled_and_non_destructive(
         dialog.close()
         QTest.qWait(200)
         main.close()
+
+
+def test_adopted_controls_preserve_wiring_and_busy_state(qapp):
+    from PyQt6.QtWidgets import QHBoxLayout, QPushButton
+
+    host = QDialog()
+    layout = QVBoxLayout(host)
+    viewport = QLineEdit(host)
+    layout.addWidget(viewport)
+    row = QHBoxLayout()
+    layout.addLayout(row)
+    calls = []
+    buttons = {}
+    for name in ('in', 'out', 'actual', 'fit'):
+        button = QPushButton(name)
+        button.clicked.connect(lambda checked=False, n=name: calls.append(n))
+        row.addWidget(button)
+        buttons[name] = button
+    bar = PreviewZoomBar.replace(
+        host, viewport, buttons=buttons, scale=lambda: 1,
+    )
+    host.show()
+    qapp.processEvents()
+    calls.clear()  # Ignore the initial fit when the viewport appears.
+    QTest.keySequence(viewport, QKeySequence('Ctrl++'))
+    assert calls == ['in']
+    buttons['out'].click()
+    assert calls == ['in', 'out']
+    buttons['in'].setEnabled(False)
+    QTest.keySequence(viewport, QKeySequence('Ctrl++'))
+    assert calls == ['in', 'out']
+    buttons['in'].setEnabled(True)
+    QTest.keySequence(viewport, QKeySequence('Ctrl++'))
+    assert calls == ['in', 'out', 'in']
+    assert bar.buttons_by_name == buttons
+    assert buttons['actual'].text() == '100%'
+    assert row.count() == 1
+    bar.hide()  # Collapsed settings must leave viewport shortcuts available.
+    QTest.keySequence(viewport, QKeySequence('Ctrl++'))
+    assert calls == ['in', 'out', 'in', 'in']
+    host.close()
+
+
+def test_embedded_previews_route_keys_to_last_used_pane(qapp):
+    from PyQt6.QtCore import QEvent
+    from PyQt6.QtWidgets import QWidget
+
+    host = QDialog()
+    layout = QVBoxLayout(host)
+    values = [0, 0]
+    bars = []
+    previews = []
+    for index in range(2):
+        pane = QWidget(host)
+        inner = QVBoxLayout(pane)
+        preview = QLineEdit(pane)
+        inner.addWidget(preview)
+        bar = PreviewZoomBar(
+            pane, preview,
+            zoom_in=lambda i=index: values.__setitem__(i, values[i] + 1),
+            zoom_out=lambda: None, actual=lambda: None, fit=lambda: None,
+            scale=lambda: 1,
+        )
+        inner.addWidget(bar)
+        layout.addWidget(pane)
+        previews.append(preview)
+        bars.append(bar)
+    host.show()
+    qapp.processEvents()
+    for index in (0, 1, 0):
+        QTest.keySequence(previews[index], QKeySequence('Ctrl++'))
+    assert values == [2, 1]
+    # A deferred-delete wrapper must not break other windows' key events.
+    other = QDialog()
+    other_layout = QVBoxLayout(other)
+    edit = QLineEdit(other)
+    other_layout.addWidget(edit)
+    removed = PreviewZoomBar(
+        other, edit, zoom_in=lambda: None, zoom_out=lambda: None,
+        actual=lambda: None, fit=lambda: None, scale=lambda: 1,
+    )
+    other_layout.addWidget(removed)
+    other.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    QTest.keySequence(previews[1], QKeySequence('Ctrl++'))
+    assert values == [2, 2]
+    host.close()
+
+
+def test_preview_ratio_uses_unscaled_source_dimensions():
+    import numpy as np
+    from setiastro.saspro.widgets.preview_zoom import preview_ratio
+
+    source = np.zeros((20, 5000), dtype=np.float32)
+    preview = source[:, ::4]
+    assert preview_ratio(preview, source) == .25
+    assert preview_ratio(None, source) == 1

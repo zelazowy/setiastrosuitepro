@@ -1,5 +1,6 @@
 #saspro/wavescale_hdr.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import numpy as np
 
 from PyQt6.QtCore import Qt, QObject, pyqtSignal, QThread, QTimer, QSettings
@@ -417,6 +418,18 @@ class WaveScaleHDRDialogPro(QDialog):
 
         # initial pix
         self._set_pix(self.preview_rgb)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_fit,
+            },
+            actual=self.view.reset_zoom,
+            scale=lambda: abs(self.view.transform().m11()),
+        )
 
     def apply_preset(self, p: dict):
         # sliders are integer; map floats to their scales
