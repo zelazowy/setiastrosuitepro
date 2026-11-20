@@ -3,7 +3,7 @@
 PreviewZoomBar now places an existing image renderer in PreviewPane. Image
 margins use the same opaque neutral background (`#181818`) in light and dark app
 themes. Zoom controls sit below the image, aligned left: minus, plus, 100%, Fit,
-percentage, followed by comparison when available. Legacy callbacks, busy states,
+percentage, followed by a comparison hint when available. Legacy callbacks, busy states,
 source-scale tracking and image-processing ownership remain with each tool.
 
 PreviewPane preserves a view's grid or splitter position. Linked frequency
@@ -13,7 +13,8 @@ available to their owners, while common QToolButtons provide the visible UI.
 
 ## Before/after interaction
 
-Hold unmodified Space, or press the Hold to compare button, to show Before.
+Hold unmodified Space to show Before. A muted Hold Space to compare hint beside
+the zoom readout explains the gesture without adding another button.
 Release it to restore the result or the selected Split/Side by side mode.
 Text fields, spin boxes and editable combos retain normal space input. Modified
 Space retains existing behavior. Focus loss, window deactivation, hiding and
@@ -54,8 +55,8 @@ turn, after the caller finishes constructing its layout. Owners keep their
 original view, viewport and renderer references. `preview_pane` exposes the
 mounted pane. Set `preview_content` before mounting to group linked views.
 
-- `enable_comparison(show_before)` attaches the focus-safe Space/button
-  controller to an existing cached renderer.
+- `enable_comparison(show_before)` attaches the focus-safe Space
+  controller and a text hint to an existing cached renderer.
 - `enable_image_comparison(before_image, redraw, source_key)` selects a cached
   QImage or QPixmap at display time. Feed the existing result to its `image()`
   method; it never replaces the processing result with the original.
@@ -68,7 +69,7 @@ mounted pane. Set `preview_content` before mounting to group linked views.
 
 BeforeAfterCompare continues to own split rendering and display stretches for
 Convolution/Deconvolution and Multiscale Decomposition. Its `use_shared_hold()`
-method delegates keyboard scope and the compare button to the common controller.
+method delegates keyboard scope and the text hint to the common controller.
 One application dispatcher holds weak references to controllers, so closing or
 garbage-collecting dialogs does not leave native event filters on dying wrappers.
 

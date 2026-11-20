@@ -625,7 +625,7 @@ class CLAHEDialogPro(QDialog):
             fit=lambda: self.view.fit_to_item(self.pix),
             scale=self._view_scale, ctrl_wheel=True,
         )
-        self.btn_hold = self.zoom_bar.enable_comparison(self._set_hold).button
+        self.zoom_bar.enable_comparison(self._set_hold)
         z.addWidget(self.zoom_bar, 1)
         z.addWidget(self.lbl_status)
         v.addLayout(z)

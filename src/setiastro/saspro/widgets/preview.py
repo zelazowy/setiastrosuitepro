@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QAbstractScrollArea, QAbstractSpinBox, QApplication, QComboBox,
     QGraphicsView, QGroupBox, QLabel, QLineEdit, QPlainTextEdit, QScrollArea,
     QSplitter, QTextEdit,
-    QToolBar, QToolButton, QVBoxLayout, QWidget,
+    QToolBar, QVBoxLayout, QWidget,
 )
 
 PREVIEW_BACKGROUND = '#181818'
@@ -148,7 +148,7 @@ class _HoldDispatcher(QObject):
 
 
 class HoldPreview(QObject):
-    """Hold Space or the compare button to display an existing original render.
+    """Hold Space to display an existing original render.
 
     ``show_before(bool)`` changes presentation; the tool owns processing/Apply.
     Text entry, modified Space and other windows keep their existing behavior.
@@ -160,19 +160,21 @@ class HoldPreview(QObject):
         self.bar = bar
         self._show_before = show_before
         self._keyboard = False
-        self._mouse = False
         self._before = False
-        self.button = QToolButton(bar)
-        self.button.setText(self.tr('Hold to compare'))
-        self.button.setMinimumWidth(self.button.sizeHint().width())
-        self.button.setToolTip(self.tr(
+        self.hint = QLabel(self.tr('Hold Space to compare'), bar)
+        self.destroyed.connect(self.hint.deleteLater)
+        self.hint.setEnabled(False)
+        self.hint.ensurePolished()
+        self.hint.setFixedWidth(max(
+            self.hint.sizeHint().width(),
+            self.hint.fontMetrics().horizontalAdvance(self.tr('Before')),
+        ))
+        self.hint.setToolTip(self.tr(
             'Hold Space to show Before; release to restore the preview',
         ))
-        self.button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.button.pressed.connect(lambda: self._set_mouse(True))
-        self.button.released.connect(lambda: self._set_mouse(False))
+        self.hint.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         # Insert before the trailing stretch in the common zoom row.
-        bar.layout().insertWidget(bar.layout().count() - 1, self.button)
+        bar.layout().insertWidget(bar.layout().count() - 1, self.hint)
         app = QApplication.instance()
         dispatcher = getattr(app, '_sas_preview_hold_dispatcher', None)
         if dispatcher is None:
@@ -184,22 +186,17 @@ class HoldPreview(QObject):
     def showing_before(self):
         return self._before
 
-    def _set_mouse(self, held):
-        self._mouse = held
-        self._update()
-
     def _update(self):
-        before = self._keyboard or self._mouse
+        before = self._keyboard
         if before == self._before:
             return
         self._before = before
-        self.button.setText(self.tr('Before') if before
-                            else self.tr('Hold to compare'))
+        self.hint.setText(self.tr('Before') if before
+                          else self.tr('Hold Space to compare'))
         self._show_before(before)
 
     def release(self):
-        self._keyboard = self._mouse = False
-        self.button.setDown(False)
+        self._keyboard = False
         self._update()
 
     def _text_entry(self, widget):

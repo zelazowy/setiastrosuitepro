@@ -125,6 +125,7 @@ class PreviewZoomBar(QWidget):
         for viewport in self._viewports:
             if not sip.isdeleted(viewport):
                 style_preview(viewport)
+        self.refresh()
 
     def enable_comparison(self, show_before):
         """Attach shared Space/button hold behavior to a cached renderer."""

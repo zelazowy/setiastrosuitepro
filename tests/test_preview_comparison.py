@@ -41,6 +41,8 @@ def preview(qapp):
     qapp.processEvents()
     scroll.setFocus()
     qapp.processEvents()
+    # Settle deferred mounting and native minimum-size updates.
+    QTest.qWait(30)
     yield host, scroll, edit, bar, comparison, calls
     if not sip.isdeleted(host):
         host.close()
@@ -117,13 +119,16 @@ def test_changing_focus_restores_after(preview, qapp):
     assert calls == [True, False]
 
 
-def test_mouse_hold_and_keyboard_hold_share_state(preview):
+def test_hint_changes_do_not_resize_the_preview(preview, qapp):
     _, scroll, _, _, comparison, calls = preview
-    QTest.mousePress(comparison.button, Qt.MouseButton.LeftButton)
+    geometry = scroll.geometry()
     QTest.keyPress(scroll.viewport(), Qt.Key.Key_Space)
-    QTest.mouseRelease(comparison.button, Qt.MouseButton.LeftButton)
+    qapp.processEvents()
     assert comparison.showing_before
+    assert scroll.geometry() == geometry
     QTest.keyRelease(scroll.viewport(), Qt.Key.Key_Space)
+    qapp.processEvents()
+    assert scroll.geometry() == geometry
     assert calls == [True, False]
 
 

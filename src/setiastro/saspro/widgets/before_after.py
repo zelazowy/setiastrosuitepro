@@ -333,7 +333,7 @@ class BeforeAfterCompare(QObject):
         self._apply()
 
     def use_shared_hold(self, zoom_bar):
-        """Use the common Space scope and compare button beside zoom."""
+        """Use the common Space scope and hint beside zoom."""
         self._shared_hold = zoom_bar.enable_comparison(self.set_hold)
         self._btn_hold.hide()
 

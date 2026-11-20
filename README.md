@@ -450,7 +450,7 @@ to zoom, so ordinary scrolling preserves Fit mode.
 See [preview zoom QA](docs/preview_zoom_qa.md) for automated coverage and the
 remaining manual checks.
 
-Hold Space or the common Hold to compare button to show the original in tools
+Hold Space to show the original in tools
 with before/after comparison; release to restore the result or selected comparison
 mode. Space remains available for text entry and existing SER/Blink selection.
 See [shared previews](docs/shared_previews.md) for supported comparison tools,
