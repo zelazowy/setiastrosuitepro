@@ -1441,6 +1441,7 @@ class StatisticalStretchDialog(QDialog):
         src = self._get_source_float()
         if src is not None:
             self._set_preview_pixmap(np.clip(src, 0, 1))
+            self.preview_comparison.set_before(self._preview_qimg)
         try:
             self.lbl_clipstats.setText(self.tr("Calculating clip stats…"))
         except Exception:
@@ -1500,6 +1501,8 @@ class StatisticalStretchDialog(QDialog):
         self._last_preview = buf8
         ptr = sip.voidptr(self._last_preview.ctypes.data)
         qimg = QImage(ptr, w, h, bytes_per_line, QImage.Format.Format_RGB888)
+        # A comparison may retain this frame after the next worker result.
+        qimg._buffer_owner = buf8
 
         if self._preview_qimg is not None and not self._fit_mode:
             self._preview_scale *= self._preview_qimg.width() / qimg.width()

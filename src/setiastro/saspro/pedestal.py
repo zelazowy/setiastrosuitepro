@@ -341,7 +341,8 @@ class RemovePedestalDialog(QDialog):
         )
         self.preview_comparison = self.zoom_bar.enable_image_comparison(
             self._comparison_before_image, self._apply_zoom,
-            source_key=lambda: id(self.doc.image),
+            source_key=lambda: (id(self.doc.image),
+                                self.chk_autostretch.isChecked()),
         )
 
     # --- mode label helper -------------------------------------------------

@@ -20,18 +20,22 @@ Text fields, spin boxes and editable combos retain normal space input. Modified
 Space retains existing behavior. Focus loss, window deactivation, hiding and
 closing restore the preview, even if no physical key release reaches the tool.
 Auto-repeat does not rerun comparison callbacks.
+Editable text inside graphics scenes and embedded proxy widgets also retains
+spaces, including captions edited directly on an image.
 
 Temporary comparison only changes display state. It does not invoke Preview,
 Apply or the processing algorithm. Cached image adapters retain a finished worker
 result while Before is held and display it on release. Original renders are
-converted lazily and reused for that hold. Zoom and source-coordinate geometry
+converted lazily and cached by source state; scaled renders are reused too.
+Statistical Stretch seeds its original cache from the existing initial render. Zoom and source-coordinate geometry
 remain stable when original/result render resolutions differ.
 
-Comparison is connected in these 24 preview contexts:
+Comparison is connected in these 28 preview contexts:
 
 - Curves, CLAHE, Statistical Stretch, ADBE and Background Neutralization.
 - Morphology, Halo-B-Gon, WaveScale HDR and WaveScale Dark Enhancer.
 - GHS, Levels/Histogram Transform, Star Stretch and Remove Pedestal.
+- Selective Color/Luminance Correction, Diffraction Spikes and Palette Intensities.
 - Texture and Clarity, FX, Convolution/Deconvolution and Multiscale Decomposition.
 - Saturation/Chroma, Layers Preview and Flat Strength Preview.
 - History Compare with Current, Signature/Insert, AstroSpike and Pixel Math.
@@ -90,7 +94,7 @@ and macOS offscreen, then repeats shared layout/interaction tests at 200% scalin
 The native Windows SendInput checks include Space typing in a field and actual
 Space press/release comparison, under US and Polish (Programmers) layouts.
 
-Tests cover source/result pixel differences in 16 real tools, exact restoration
+Tests cover source/result pixel differences in 19 real tools, exact restoration
 of result pixels and source scale, unmodified source arrays, source changes and
 worker results while held, focus changes, hidden/deleted widgets, repeated
 closing/garbage collection, splitter ordering, overlay visibility, uint16 data,

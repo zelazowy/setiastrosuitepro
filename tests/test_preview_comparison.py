@@ -286,3 +286,80 @@ def test_unicode_and_unknown_keys_remain_text_input(preview):
         QApplication.sendEvent(edit, event)
     assert edit.text() == 'ĄŁ'
     assert calls == []
+
+
+@pytest.mark.parametrize('editor_kind', ['graphics_text', 'proxy_widget'])
+def test_text_editors_inside_a_graphics_scene_keep_spaces(qapp, editor_kind):
+    from PyQt6.QtWidgets import (
+        QGraphicsScene, QGraphicsTextItem, QGraphicsView,
+    )
+
+    host = QDialog()
+    layout = QVBoxLayout(host)
+    scene = QGraphicsScene(host)
+    view = QGraphicsView(scene, host)
+    layout.addWidget(view)
+    calls = []
+    bar = PreviewZoomBar(
+        host, view.viewport(), zoom_in=lambda: None, zoom_out=lambda: None,
+        actual=lambda: None, fit=lambda: None, scale=lambda: 1,
+    )
+    layout.addWidget(bar)
+    bar.enable_comparison(calls.append)
+    if editor_kind == 'graphics_text':
+        editor = QGraphicsTextItem()
+        editor.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextEditorInteraction,
+        )
+        scene.addItem(editor)
+        item = editor
+        text = editor.toPlainText
+    else:
+        editor = QLineEdit()
+        item = scene.addWidget(editor)
+        text = editor.text
+    host.show()
+    host.activateWindow()
+    QTest.qWait(30)
+    view.setFocus()
+    scene.setFocusItem(item)
+    if editor_kind == 'proxy_widget':
+        editor.setFocus()
+    qapp.processEvents()
+    try:
+        QTest.keyClicks(view, 'a b')
+        assert text() == 'a b'
+        assert calls == []
+    finally:
+        host.close()
+        host.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+def test_repeated_holds_reuse_original_until_source_changes(preview):
+    _, scroll, _, bar, old, _ = preview
+    old.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    source_version = [1]
+    conversions = []
+    result = QImage(10, 5, QImage.Format.Format_RGB32)
+    result.fill(QColor('blue'))
+
+    def original():
+        conversions.append(source_version[0])
+        image = QImage(20, 10, QImage.Format.Format_RGB32)
+        image.fill(QColor('red'))
+        return image
+
+    comparison = bar.enable_image_comparison(
+        original, lambda: comparison.image(result),
+        source_key=lambda: source_version[0],
+    )
+    for _ in range(3):
+        QTest.keyPress(scroll, Qt.Key.Key_Space)
+        QTest.keyRelease(scroll, Qt.Key.Key_Space)
+    assert conversions == [1]
+    source_version[0] = 2
+    QTest.keyPress(scroll, Qt.Key.Key_Space)
+    QTest.keyRelease(scroll, Qt.Key.Key_Space)
+    assert conversions == [1, 2]

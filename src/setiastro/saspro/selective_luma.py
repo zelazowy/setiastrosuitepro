@@ -906,6 +906,16 @@ class SelectiveLuminanceCorrection(QDialog):
             scale=lambda: self._zoom * ratio(),
             reduced=lambda: ratio() < 0.999,
         )
+        self.preview_comparison = self.zoom_bar.enable_image_comparison(
+            lambda: _to_pixmap(self._last_base),
+            self._redraw_comparison,
+            source_key=lambda: id(self._last_base),
+        )
+
+    def _redraw_comparison(self):
+        comparison = self.preview_comparison
+        if comparison.result is not None:
+            self.lbl_preview.setPixmap(comparison.image(comparison.result))
 
     # =================================================================
     # Helpers
@@ -1454,6 +1464,8 @@ class SelectiveLuminanceCorrection(QDialog):
                               Qt.AspectRatioMode.IgnoreAspectRatio,
                               Qt.TransformationMode.SmoothTransformation)
         pm_scaled = self._draw_region_outline_on_pixmap(pm_scaled)
+        if hasattr(self, 'preview_comparison'):
+            pm_scaled = self.preview_comparison.image(pm_scaled)
         self.lbl_preview.setPixmap(pm_scaled)
         self.lbl_preview.resize(zw, zh)
 

@@ -268,6 +268,11 @@ class StarSpikesDialogPro(QDialog):
             ),
             scale=lambda: abs(self.view.transform().m11()),
         )
+        from setiastro.saspro.widgets.preview import source_preview_image
+        self.preview_comparison = self.zoom_bar.enable_pixmap_comparison(
+            lambda: source_preview_image(self._img_src), self.pix,
+            source_key=lambda: id(self._img_src),
+        )
 
     def _toggle_pupil(self, jwst: bool):
         self.pupil_jwst.setText("JWST" if jwst else "Circular")
@@ -757,7 +762,10 @@ class StarSpikesDialogPro(QDialog):
         else:
             h, w, _ = arr8.shape
             qimg = QImage(arr8.data, w, h, 3*w, QImage.Format.Format_RGB888)
-        self.pix.setPixmap(QPixmap.fromImage(qimg))
+        pixmap = QPixmap.fromImage(qimg)
+        if hasattr(self, 'preview_comparison'):
+            pixmap = self.preview_comparison.image(pixmap)
+        self.pix.setPixmap(pixmap)
         self.scene.setSceneRect(self.pix.boundingRect())
         # keep current zoom mode
         self._apply_zoom()

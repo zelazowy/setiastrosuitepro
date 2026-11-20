@@ -5,7 +5,8 @@ from PyQt6.QtCore import QEvent, QObject, Qt
 from PyQt6.QtGui import QBrush, QColor, QImage, QPalette, QPixmap
 from PyQt6.QtWidgets import (
     QAbstractScrollArea, QAbstractSpinBox, QApplication, QComboBox,
-    QGraphicsView, QGroupBox, QLabel, QLineEdit, QPlainTextEdit, QScrollArea,
+    QGraphicsProxyWidget, QGraphicsTextItem, QGraphicsView, QGroupBox,
+    QLabel, QLineEdit, QPlainTextEdit, QScrollArea,
     QSplitter, QTextEdit,
     QToolBar, QVBoxLayout, QWidget,
 )
@@ -206,6 +207,19 @@ class HoldPreview(QObject):
                 return True
             if isinstance(widget, QComboBox) and widget.isEditable():
                 return True
+            if (isinstance(widget, QGraphicsView)
+                    and widget.scene() is not None):
+                item = widget.scene().focusItem()
+                if (isinstance(item, QGraphicsTextItem)
+                        and item.textInteractionFlags()
+                        & Qt.TextInteractionFlag.TextEditable):
+                    return True
+                if isinstance(item, QGraphicsProxyWidget):
+                    embedded = item.widget()
+                    if embedded is not None:
+                        return self._text_entry(
+                            embedded.focusWidget() or embedded,
+                        )
             widget = widget.parentWidget()
         return False
 
@@ -267,14 +281,25 @@ class CachedImageComparison(QObject):
         self._before_image = before_image
         self._redraw = redraw
         self._source_key = source_key or (lambda: None)
+        self._cache_across_holds = source_key is not None
         self._original = None
+        self._scaled_original = None
         self._key = None
         self.result = None
         self.hold = bar.enable_comparison(self._changed)
 
     def _changed(self, before):
-        self._original = None
+        if not self._cache_across_holds:
+            self._original = self._scaled_original = None
         self._redraw()
+
+    def set_before(self, image):
+        """Seed a rendered original for the current stable source key."""
+        if not self._cache_across_holds:
+            raise ValueError('Seeding an original requires a source_key')
+        self._original = image
+        self._scaled_original = None
+        self._key = self._source_key()
 
     def image(self, result):
         self.result = result
@@ -283,6 +308,7 @@ class CachedImageComparison(QObject):
         key = self._source_key()
         if self._original is None or key != self._key:
             self._original = self._before_image()
+            self._scaled_original = None
             self._key = key
         if self._original is None or self._original.isNull():
             return result
@@ -293,10 +319,14 @@ class CachedImageComparison(QObject):
             self._original = self._original.toImage()
         if self._original.size() == result.size():
             return self._original
-        return self._original.scaled(
-            result.size(), Qt.AspectRatioMode.IgnoreAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
+        if (self._scaled_original is None
+                or self._scaled_original.size() != result.size()
+                or type(self._scaled_original) is not type(result)):
+            self._scaled_original = self._original.scaled(
+                result.size(), Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        return self._scaled_original
 
 
 class SceneOverlayComparison(QObject):

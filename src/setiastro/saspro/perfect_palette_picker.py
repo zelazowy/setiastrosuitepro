@@ -133,6 +133,11 @@ class PaletteAdjustDialog(QDialog):
             ),
             scale=lambda: self.zoom_factor,
         )
+        self.chk_show_adj.hide()
+        self.preview_comparison = self.zoom_bar.enable_image_comparison(
+            lambda: self._orig_pixmap, self._rescale_pixmap,
+            source_key=lambda: id(self._orig_pixmap),
+        )
 
     def _on_slider_change(self, _):
         self.ha_factor   = self._ha_slider.value()/100.0
@@ -180,6 +185,8 @@ class PaletteAdjustDialog(QDialog):
         pm = self._active_pixmap()
         if pm is None:
             return
+        if hasattr(self, 'preview_comparison'):
+            pm = self.preview_comparison.image(pm)
         w = int(pm.width()  * self.zoom_factor)
         h = int(pm.height() * self.zoom_factor)
         scaled = pm.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)

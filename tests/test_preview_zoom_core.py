@@ -78,6 +78,9 @@ def test_shortcuts_stay_in_tool_and_leave_plain_text_alone(qapp):
     main.activateWindow()
     main.setFocus()
     qapp.processEvents()
+    # QTest dispatches synthetic keys; establish their Qt shortcut scope even
+    # when another desktop application currently owns native macOS focus.
+    qapp.setActiveWindow(main)
     QTest.keySequence(main, QKeySequence('Ctrl+0'))
     qapp.processEvents()
     assert main_calls == [True]
