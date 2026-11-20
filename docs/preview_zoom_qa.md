@@ -55,6 +55,10 @@ Coverage includes:
    explicitly without extending shortcuts to unrelated child dialogs.
 7. Ctrl-wheel previews other than CLAHE did not declare their wheel policy;
    ordinary scrolling could exit Fit. These adapters now declare that policy.
+8. Native macOS testing exposed a Curves transition bug: restoring the old 100%
+   scale while switching to a reduced Fit render could re-enable full-resolution
+   detail and its cache. Fit now replaces the bitmap without restoring that
+   intermediate scale; the regression checks both mode and cache release.
 
 ## Manual validation and limits
 

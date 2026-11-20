@@ -125,7 +125,12 @@ def test_tool_zoom_is_source_scaled_and_non_destructive(
         QTest.qWait(100)
         assert bar._scale() == pytest.approx(1, abs=.01)
         if module_name == 'curve_editor_pro':
+            # Native window minimums differ; explicitly exercise Fit below 100%.
+            dialog.scroll.setFixedWidth(700)
+            QTest.qWait(50)
             press('Ctrl+0')
+            assert bar._scale() < 1
+            assert not dialog._detail_preview
             assert dialog._full_cache is None
             dialog.btn_preview.setChecked(False)
             press('Ctrl+1')

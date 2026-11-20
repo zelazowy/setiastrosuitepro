@@ -3521,7 +3521,9 @@ class CurvesDialogPro(QDialog):
                 self._invalidate_full_cache()
             image = (self._preview_proc if self._show_proc
                      else self._preview_orig)
-            self._update_preview_pix(image)
+            # Fit replaces the view scale below. Restoring the old 100% view
+            # here would immediately request full-resolution detail again.
+            self._update_preview_pix(image, preserve_view=False)
         if self._pix.width() == 0 or self._pix.height() == 0:
             return
         scale = min(vp.width() / self._pix.width(),
