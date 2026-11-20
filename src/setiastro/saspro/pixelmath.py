@@ -1006,7 +1006,7 @@ class _PreviewView(QGraphicsView):
             self._zoom = abs(self.transform().m11())
             new_zoom = max(
                 min(self._min_zoom, self._zoom / 1.25),
-                min(self._zoom * step, self._max_zoom))
+                min(self._zoom * step, max(self._zoom, self._max_zoom)))
             step = new_zoom / self._zoom  # clamp-aware step
             self._zoom = new_zoom
             self.scale(step, step)
@@ -1023,7 +1023,7 @@ class _PreviewView(QGraphicsView):
         self._zoom = abs(self.transform().m11())
         new_zoom = max(
             min(self._min_zoom, self._zoom / 1.25),
-            min(self._zoom * float(factor), self._max_zoom))
+            min(self._zoom * float(factor), max(self._zoom, self._max_zoom)))
         factor = new_zoom / self._zoom
         self._zoom = new_zoom
         self.scale(factor, factor)
@@ -1429,6 +1429,7 @@ class PixelMathDialogPro(QDialog):
             },
             actual=self._zoom_reset_1_1,
             scale=lambda: abs(self.preview_view.transform().m11()),
+            ctrl_wheel=True,
         )
 
     # ─────────────── Auto-stretch prefs ───────────────

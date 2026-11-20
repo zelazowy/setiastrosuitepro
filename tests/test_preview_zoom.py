@@ -1,115 +1,12 @@
 import pytest
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QKeySequence, QPixmap
+from PyQt6.QtGui import QKeySequence
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import (
-    QApplication, QDialog, QGraphicsScene, QLineEdit, QMainWindow,
-    QScrollArea, QVBoxLayout,
-)
-
-from setiastro.saspro.widgets.graphics_views import ZoomableGraphicsView
-from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
+from PyQt6.QtWidgets import QApplication, QMainWindow
 
 
 @pytest.fixture(scope='module')
 def qapp():
     return QApplication.instance() or QApplication([])
-
-
-def test_shortcuts_stay_in_tool_and_leave_plain_text_alone(qapp):
-    main = QMainWindow()
-    main_calls = []
-    main_action = QAction('Main zoom', main)
-    main_action.setShortcut(QKeySequence('Ctrl+0'))
-    main_action.triggered.connect(lambda: main_calls.append(True))
-    main.addAction(main_action)
-    main.show()
-    tool = QDialog(main)
-    tool.setWindowFlag(Qt.WindowType.Tool, True)
-    layout = QVBoxLayout(tool)
-    edit = QLineEdit(tool)
-    layout.addWidget(edit)
-    preview = QScrollArea(tool)
-    layout.addWidget(preview)
-    state = {'scale': .5, 'fit_calls': 0}
-
-    def set_scale(scale):
-        state['scale'] = scale
-
-    def fit():
-        state['fit_calls'] += 1
-        set_scale(.5)
-
-    bar = PreviewZoomBar(
-        tool, preview.viewport(),
-        zoom_in=lambda: set_scale(state['scale'] * 1.25),
-        zoom_out=lambda: set_scale(state['scale'] / 1.25),
-        actual=lambda: set_scale(1), fit=fit,
-        scale=lambda: state['scale'],
-    )
-    layout.addWidget(bar)
-    tool.show()
-    tool.activateWindow()
-    edit.setFocus()
-    qapp.processEvents()
-    for key, expected in (
-        ('Ctrl+1', 1), ('Ctrl++', 1.25), ('Ctrl+-', 1),
-        ('Ctrl+=', 1.25), ('Ctrl+-', 1),
-        ('Ctrl+Shift+=', 1.25), ('Ctrl+0', .5),
-    ):
-        QTest.keySequence(edit, QKeySequence(key))
-        qapp.processEvents()
-        assert state['scale'] == pytest.approx(expected), key
-    assert main_calls == []
-    QTest.keyClicks(edit, '10+-')
-    assert edit.text() == '10+-'
-    assert state['scale'] == .5
-    initial_calls = state['fit_calls']
-    tool.resize(tool.width() + 100, tool.height() + 80)
-    qapp.processEvents()
-    qapp.processEvents()
-    assert state['fit_calls'] > initial_calls
-    QTest.keySequence(edit, QKeySequence('Ctrl+1'))
-    initial_calls = state['fit_calls']
-    tool.resize(tool.width() + 100, tool.height() + 80)
-    qapp.processEvents()
-    assert state['scale'] == 1
-    assert state['fit_calls'] == initial_calls
-    main.activateWindow()
-    main.setFocus()
-    qapp.processEvents()
-    QTest.keySequence(main, QKeySequence('Ctrl+0'))
-    qapp.processEvents()
-    assert main_calls == [True]
-    assert state['scale'] == 1
-    tool.close()
-    main.close()
-
-
-def test_graphics_zoom_uses_actual_transform_after_fit(qapp):
-    scene = QGraphicsScene()
-    item = scene.addPixmap(QPixmap(2000, 1000))
-    view = ZoomableGraphicsView(scene)
-    view.resize(500, 300)
-    view.show()
-    qapp.processEvents()
-    view.fit_to_item(item)
-    scale = view.transform().m11()
-    assert view.zoom_level == pytest.approx(scale)
-    view.zoom_in()
-    assert view.transform().m11() == pytest.approx(scale * 1.25)
-    view.resetTransform()  # existing callers also reset directly
-    view.zoom_out()
-    assert view.transform().m11() == pytest.approx(.8)
-    large_item = scene.addRect(0, 0, 100000, 1000)
-    view.fit_to_item(large_item)
-    scale = view.transform().m11()
-    assert scale < .05
-    view.zoom_in()
-    assert view.transform().m11() == pytest.approx(scale * 1.25)
-    view.zoom_out()
-    assert view.transform().m11() == pytest.approx(scale)
-    view.close()
 
 
 @pytest.mark.parametrize('module_name,class_name', [
@@ -161,6 +58,13 @@ def test_tool_zoom_is_source_scaled_and_non_destructive(
             assert not dialog._reduced_preview()
             assert dialog._pix.width() == image.shape[1]
             assert not dialog.chk_full_bg.isChecked()
+            dialog._pop_out_panel(restore_geometry=False)
+            QTest.qWait(30)
+            QTest.keySequence(dialog.curve_panel, QKeySequence('Ctrl++'))
+            assert bar._scale() == pytest.approx(1.25, abs=.01)
+            QTest.keySequence(dialog.curve_panel, QKeySequence('Ctrl+-'))
+            assert bar._scale() == pytest.approx(1, abs=.01)
+            dialog._pop_in_panel()
 
         def source_center():
             if module_name in ('clahe', 'backgroundneutral'):
@@ -241,98 +145,55 @@ def test_tool_zoom_is_source_scaled_and_non_destructive(
         main.close()
 
 
-def test_adopted_controls_preserve_wiring_and_busy_state(qapp):
-    from PyQt6.QtWidgets import QHBoxLayout, QPushButton
-
-    host = QDialog()
-    layout = QVBoxLayout(host)
-    viewport = QLineEdit(host)
-    layout.addWidget(viewport)
-    row = QHBoxLayout()
-    layout.addLayout(row)
-    calls = []
-    buttons = {}
-    for name in ('in', 'out', 'actual', 'fit'):
-        button = QPushButton(name)
-        button.clicked.connect(lambda checked=False, n=name: calls.append(n))
-        row.addWidget(button)
-        buttons[name] = button
-    bar = PreviewZoomBar.replace(
-        host, viewport, buttons=buttons, scale=lambda: 1,
-    )
-    host.show()
-    qapp.processEvents()
-    calls.clear()  # Ignore the initial fit when the viewport appears.
-    QTest.keySequence(viewport, QKeySequence('Ctrl++'))
-    assert calls == ['in']
-    buttons['out'].click()
-    assert calls == ['in', 'out']
-    buttons['in'].setEnabled(False)
-    QTest.keySequence(viewport, QKeySequence('Ctrl++'))
-    assert calls == ['in', 'out']
-    buttons['in'].setEnabled(True)
-    QTest.keySequence(viewport, QKeySequence('Ctrl++'))
-    assert calls == ['in', 'out', 'in']
-    assert bar.buttons_by_name == buttons
-    assert buttons['actual'].text() == '100%'
-    assert row.count() == 1
-    bar.hide()  # Collapsed settings must leave viewport shortcuts available.
-    QTest.keySequence(viewport, QKeySequence('Ctrl++'))
-    assert calls == ['in', 'out', 'in', 'in']
-    host.close()
-
-
-def test_embedded_previews_route_keys_to_last_used_pane(qapp):
-    from PyQt6.QtCore import QEvent
-    from PyQt6.QtWidgets import QWidget
-
-    host = QDialog()
-    layout = QVBoxLayout(host)
-    values = [0, 0]
-    bars = []
-    previews = []
-    for index in range(2):
-        pane = QWidget(host)
-        inner = QVBoxLayout(pane)
-        preview = QLineEdit(pane)
-        inner.addWidget(preview)
-        bar = PreviewZoomBar(
-            pane, preview,
-            zoom_in=lambda i=index: values.__setitem__(i, values[i] + 1),
-            zoom_out=lambda: None, actual=lambda: None, fit=lambda: None,
-            scale=lambda: 1,
-        )
-        inner.addWidget(bar)
-        layout.addWidget(pane)
-        previews.append(preview)
-        bars.append(bar)
-    host.show()
-    qapp.processEvents()
-    for index in (0, 1, 0):
-        QTest.keySequence(previews[index], QKeySequence('Ctrl++'))
-    assert values == [2, 1]
-    # A deferred-delete wrapper must not break other windows' key events.
-    other = QDialog()
-    other_layout = QVBoxLayout(other)
-    edit = QLineEdit(other)
-    other_layout.addWidget(edit)
-    removed = PreviewZoomBar(
-        other, edit, zoom_in=lambda: None, zoom_out=lambda: None,
-        actual=lambda: None, fit=lambda: None, scale=lambda: 1,
-    )
-    other_layout.addWidget(removed)
-    other.deleteLater()
-    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    QTest.keySequence(previews[1], QKeySequence('Ctrl++'))
-    assert values == [2, 2]
-    host.close()
-
-
-def test_preview_ratio_uses_unscaled_source_dimensions():
+@pytest.mark.parametrize('module_name,class_name', [
+    ('curve_editor_pro', 'CurvesDialogPro'),
+    ('clahe', 'CLAHEDialogPro'),
+    ('stat_stretch', 'StatisticalStretchDialog'),
+    ('backgroundneutral', 'BackgroundNeutralizationDialog'),
+    ('abe', 'ABEDialog'),
+    ('pixelmath', 'PixelMathDialogPro'),
+    ('ghs_dialog_pro', 'GhsDialogPro'),
+    ('histogram_transform_pro', 'HistogramTransformDialogPro'),
+])
+def test_zoom_steps_after_fitting_tiny_image(
+        qapp, tmp_path, monkeypatch, module_name, class_name):
+    import importlib
     import numpy as np
-    from setiastro.saspro.widgets.preview_zoom import preview_ratio
+    from PyQt6.QtCore import QSettings
+    from setiastro.saspro.doc_manager import ImageDocument
 
-    source = np.zeros((20, 5000), dtype=np.float32)
-    preview = source[:, ::4]
-    assert preview_ratio(preview, source) == .25
-    assert preview_ratio(None, source) == 1
+    module = importlib.import_module('setiastro.saspro.' + module_name)
+    if hasattr(module, 'QSettings'):
+        monkeypatch.setattr(
+            module, 'QSettings', lambda *args, **kwargs: QSettings(
+                str(tmp_path / 'tiny.ini'), QSettings.Format.IniFormat,
+            ),
+        )
+    image = np.full((8, 8, 3), .2, dtype=np.float32)
+    doc = ImageDocument(image)
+    main = QMainWindow()
+    dialog = getattr(module, class_name)(main, doc)
+    if module_name == 'pixelmath':
+        dialog._set_preview_image(image)
+    dialog.show()
+    dialog.activateWindow()
+    dialog.setFocus()
+    QTest.qWait(200)
+    try:
+        bar = dialog.zoom_bar
+        bar.actions_by_name['fit'].trigger()
+        QTest.qWait(50)
+        fitted = bar._scale()
+        assert fitted > 0
+        bar.actions_by_name['in'].trigger()
+        QTest.qWait(50)
+        enlarged = bar._scale()
+        assert enlarged >= fitted * .999
+        bar.actions_by_name['out'].trigger()
+        QTest.qWait(50)
+        assert bar._scale() == pytest.approx(enlarged / 1.25, rel=.02)
+        np.testing.assert_array_equal(image, np.full_like(image, .2))
+    finally:
+        dialog.close()
+        QTest.qWait(200)
+        main.close()

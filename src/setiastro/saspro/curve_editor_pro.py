@@ -2142,6 +2142,7 @@ class CurvesDialogPro(QDialog):
             return
 
         win = _DetachedCurvePanel(self.tr("Curves — Editor"), self)
+        self.zoom_bar.watch_controls(win)
         win.closed.connect(self._pop_in_panel)
 
         # Swap the panel out of the dialog; drop the placeholder into its slot.

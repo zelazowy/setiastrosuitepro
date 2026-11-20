@@ -1378,9 +1378,8 @@ class StatisticalStretchDialog(QDialog):
         ix = cx / old_scale
         iy = cy / old_scale
         self._fit_mode = False
-        new_scale = max(1e-6, min(
-            old_scale * float(factor), 8.0 / self._preview_ratio()
-        ))
+        ceiling = max(old_scale, 8.0 / self._preview_ratio())
+        new_scale = max(1e-6, min(old_scale * float(factor), ceiling))
         self._preview_scale = new_scale
         self._update_preview_scaled()
         ncx = int(ix * new_scale)

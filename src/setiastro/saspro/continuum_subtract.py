@@ -270,6 +270,7 @@ class QPreviewDialog(QDialog):
             },
             actual=self._view.reset_zoom,
             scale=lambda: abs(self._view.transform().m11()),
+            ctrl_wheel=True,
         )
 
     # ── slots ─────────────────────────────────────────────────────────────────
@@ -2458,6 +2459,7 @@ class ContinuumSubtractTab(QWidget):
             },
             actual=view.reset_zoom,
             scale=lambda: abs(view.transform().m11()),
+            ctrl_wheel=True,
         )
         dlg.exec()
 

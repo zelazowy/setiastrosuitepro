@@ -74,7 +74,8 @@ class ZoomableGraphicsView(QGraphicsView):
         step = self._zoom_step if up else (1.0 / self._zoom_step)
         # A fit can be below the manual floor; do not jump on the next step.
         lower = min(self._zoom_min, self._zoom / self._zoom_step)
-        new_zoom = max(lower, min(self._zoom_max, self._zoom * step))
+        upper = max(self._zoom_max, self._zoom)
+        new_zoom = max(lower, min(upper, self._zoom * step))
         factor = new_zoom / self._zoom
         
         if factor != 1.0:

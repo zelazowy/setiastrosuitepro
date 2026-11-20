@@ -429,6 +429,7 @@ class WaveScaleHDRDialogPro(QDialog):
             },
             actual=self.view.reset_zoom,
             scale=lambda: abs(self.view.transform().m11()),
+            ctrl_wheel=True,
         )
 
     def apply_preset(self, p: dict):

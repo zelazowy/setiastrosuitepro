@@ -3892,7 +3892,7 @@ class ABEDialog(QDialog):
         (a QPoint in viewport coordinates) stationary.
         """
         old_scale = float(self._preview_scale)
-        new_scale = max(1e-6, min(old_scale * factor, 8.0))
+        new_scale = max(1e-6, min(old_scale * factor, max(8.0, old_scale)))
         if abs(new_scale - old_scale) < 1e-6:
             return
         factor = new_scale / old_scale

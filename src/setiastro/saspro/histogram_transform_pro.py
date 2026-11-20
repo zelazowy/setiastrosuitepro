@@ -1118,7 +1118,8 @@ class HistogramTransformDialogPro(QDialog):
     def _zoom_at(self, factor: float):
         ratio = preview_ratio(self._preview_base, self._base)
         self._zoom = max(
-            1e-6, min(self._max_zoom / ratio, self._zoom * float(factor)))
+            1e-6, min(max(self._zoom, self._max_zoom / ratio),
+                      self._zoom * float(factor)))
         self._apply_zoom()
 
     def _fit_to_preview(self):

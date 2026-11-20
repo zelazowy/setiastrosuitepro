@@ -364,6 +364,7 @@ class WaveScaleDarkEnhancerDialogPro(QDialog):
             },
             actual=self.view.reset_zoom,
             scale=lambda: abs(self.view.transform().m11()),
+            ctrl_wheel=True,
         )
 
     def _combine_with_doc_mask(self, op_mask: np.ndarray | None) -> np.ndarray | None:

@@ -213,6 +213,7 @@ class MorphologyDialogPro(QDialog):
             buttons={'out': btn_out, 'in': btn_in, 'fit': btn_fit},
             actual=self.view.reset_zoom,
             scale=lambda: abs(self.view.transform().m11()),
+            ctrl_wheel=True,
         )
 
     def _debounce(self): self._timer.start(200)

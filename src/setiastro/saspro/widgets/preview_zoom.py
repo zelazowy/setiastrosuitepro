@@ -6,7 +6,8 @@ from PyQt6 import sip
 from PyQt6.QtCore import QEvent, QTimer, Qt
 from PyQt6.QtGui import QAction, QIcon, QKeySequence
 from PyQt6.QtWidgets import (
-    QApplication, QHBoxLayout, QLabel, QToolButton, QWidget,
+    QAbstractButton, QApplication, QBoxLayout, QHBoxLayout, QLabel,
+    QToolButton, QWidget,
 )
 
 
@@ -26,6 +27,7 @@ class PreviewZoomBar(QWidget):
         self._instances.add(self)
         self._order = next(self._sequence)
         self._host = host
+        self._control_scopes = weakref.WeakSet([host])
         self._viewport = viewport
         self._viewports = [viewport]
         self._fit = fit
@@ -49,11 +51,13 @@ class PreviewZoomBar(QWidget):
             ('fit', self.tr('Fit'), self.tr('Fit to Preview'), 'zoom-fit-best',
              ('Ctrl+0',), fit),
         ):
-            action = QAction(QIcon.fromTheme(icon), text, host)
+            # The host registers shortcuts, but the bar owns their lifetime.
+            action = QAction(QIcon.fromTheme(icon), text, self)
             action.setShortcuts([QKeySequence(key) for key in keys])
             action.setShortcutContext(
                 Qt.ShortcutContext.WidgetWithChildrenShortcut
             )
+            action.setAutoRepeat(name in ('in', 'out'))
             shortcut = action.shortcuts()[0].toString(
                 QKeySequence.SequenceFormat.NativeText
             )
@@ -128,26 +132,35 @@ class PreviewZoomBar(QWidget):
             layout = parent.layout() if parent is not None else host.layout()
             return walk(layout)
 
-        first = next(iter(buttons.values()))
-        target = find_layout(first)
-        if target is None:
-            raise ValueError('Preview zoom buttons must be in a layout')
-        index = min(target.indexOf(button) for button in buttons.values()
-                    if target.indexOf(button) >= 0)
-        for button in buttons.values():
-            layout = find_layout(button)
-            if layout is not None:
-                layout.removeWidget(button)
-        if actual is not None and 'actual' in buttons:
-            buttons['actual'].clicked.disconnect()
-            buttons['actual'].clicked.connect(actual)
+        names = {'in', 'out', 'actual', 'fit'}
+        if not buttons or not set(buttons) <= names:
+            raise ValueError('Provide named preview zoom buttons')
+        if any(not isinstance(button, QAbstractButton)
+               for button in buttons.values()):
+            raise TypeError('Preview zoom controls must be QAbstractButtons')
         callbacks = {name: button.click for name, button in buttons.items()}
         for name, callback in (('actual', actual), ('in', zoom_in),
                                ('out', zoom_out), ('fit', fit)):
             if name not in callbacks:
-                if callback is None:
+                if not callable(callback):
                     raise ValueError(f'A preview needs a {name} callback')
                 callbacks[name] = callback
+        first = next(iter(buttons.values()))
+        target = find_layout(first)
+        layouts = [find_layout(button) for button in buttons.values()]
+        if not isinstance(target, QBoxLayout) or any(
+                layout is None for layout in layouts):
+            raise ValueError('Preview zoom buttons must be in box layouts')
+        index = min(target.indexOf(button) for button in buttons.values()
+                    if target.indexOf(button) >= 0)
+        for button, layout in zip(buttons.values(), layouts):
+            layout.removeWidget(button)
+        if actual is not None and 'actual' in buttons:
+            try:
+                buttons['actual'].clicked.disconnect()
+            except TypeError:
+                pass  # A legacy button may not have a connection yet.
+            buttons['actual'].clicked.connect(actual)
         bar = cls(host, viewport, zoom_in=callbacks['in'],
                   zoom_out=callbacks['out'], actual=callbacks['actual'],
                   fit=callbacks['fit'], scale=scale, reduced=reduced,
@@ -160,6 +173,12 @@ class PreviewZoomBar(QWidget):
         """Keep fit mode in sync with an additional linked preview."""
         self._viewports.append(viewport)
         viewport.installEventFilter(self)
+
+    def watch_controls(self, widget):
+        """Route shortcuts from an explicitly linked detached editor window."""
+        self._control_scopes.add(widget)
+        for action in self.actions_by_name.values():
+            widget.addAction(action)
 
     def _activate(self):
         self._host.window()._active_preview_zoom_bar = weakref.ref(self)
@@ -176,6 +195,8 @@ class PreviewZoomBar(QWidget):
         self.refresh()
 
     def refresh(self):
+        if sip.isdeleted(self) or sip.isdeleted(self._host):
+            return
         for name, button in self.buttons_by_name.items():
             if (isinstance(button, QToolButton)
                     and button.defaultAction() is not None):
@@ -191,9 +212,14 @@ class PreviewZoomBar(QWidget):
 
     def _refit(self):
         self._fit_pending = False
-        if self._fit_mode and self._viewport.isVisible():
+        if (not sip.isdeleted(self) and not sip.isdeleted(self._host)
+                and self._fit_mode and self._has_visible_viewport()):
             self._fit()
             self.refresh()
+
+    def _has_visible_viewport(self):
+        return any(not sip.isdeleted(viewport) and viewport.isVisible()
+                   for viewport in self._viewports)
 
     def _handles_keys(self, obj):
         # Embedded tools and multiple independent previews share a window.
@@ -205,15 +231,17 @@ class PreviewZoomBar(QWidget):
             if (sip.isdeleted(bar) or not getattr(bar, "_ready", False)
                     or sip.isdeleted(bar._host)):
                 continue
-            if (sip.isdeleted(bar._viewport) or not bar._viewport.isVisible()
-                    or bar._host.window() is not obj.window()):
+            if not bar._has_visible_viewport():
                 continue
-            depth, parent = 0, obj
-            while parent is not None and parent is not bar._host:
-                depth += 1
-                parent = parent.parentWidget()
-            if parent is bar._host:
-                candidates.append((depth, bar._order, bar))
+            for scope in list(bar._control_scopes):
+                if sip.isdeleted(scope) or scope.window() is not obj.window():
+                    continue
+                depth, parent = 0, obj
+                while parent is not None and parent is not scope:
+                    depth += 1
+                    parent = parent.parentWidget()
+                if parent is scope:
+                    candidates.append((depth, bar._order, bar))
         if not candidates:
             return False
         nearest = min(item[0] for item in candidates)
@@ -231,7 +259,8 @@ class PreviewZoomBar(QWidget):
         return (chosen or min(candidates, key=lambda item: item[1])[2]) is self
 
     def eventFilter(self, obj, event):
-        if not getattr(self, "_ready", False) or sip.isdeleted(self._viewport):
+        if (not getattr(self, "_ready", False)
+                or sip.isdeleted(self._host)):
             return False
         # Qt Tool windows inherit their parent's WindowShortcuts. Reserve
         # preview keys before shortcut resolution to avoid ambiguous matches
@@ -247,7 +276,9 @@ class PreviewZoomBar(QWidget):
                        for key in action.shortcuts()):
                     event.accept()
                     if event.type() == QEvent.Type.KeyPress:
-                        if action.isEnabled():
+                        if (action.isEnabled()
+                                and (not event.isAutoRepeat()
+                                     or action.autoRepeat())):
                             action.trigger()
                     return True
         inside = (isinstance(obj, QWidget)
@@ -259,8 +290,10 @@ class PreviewZoomBar(QWidget):
             self._activate()
         if inside:
             if event.type() == QEvent.Type.Wheel:
-                if (not self._ctrl_wheel or event.modifiers()
-                        & Qt.KeyboardModifier.ControlModifier):
+                moved = not (event.angleDelta().isNull()
+                             and event.pixelDelta().isNull())
+                if moved and (not self._ctrl_wheel or event.modifiers()
+                              & Qt.KeyboardModifier.ControlModifier):
                     self._fit_mode = False
             elif obj in self._viewports and event.type() == QEvent.Type.Resize:
                 if self._fit_mode and not self._fit_pending:

@@ -442,6 +442,12 @@ New previews can use `widgets.preview_zoom.PreviewZoomBar` with explicit rendere
 callbacks and a source-scale callback. `PreviewZoomBar.replace()` adopts legacy
 buttons, preserving their existing signals and enabled states. Linked previews
 can register an additional viewport with `watch_viewport()`.
+Detached editor windows can opt in with `watch_controls()`; unrelated dialogs
+keep their own shortcuts. Set `ctrl_wheel=True` for previews that require Ctrl
+to zoom, so ordinary scrolling preserves Fit mode.
+
+See [preview zoom QA](docs/preview_zoom_qa.md) for automated coverage and the
+remaining manual checks.
 
 ## Dependency Management
 

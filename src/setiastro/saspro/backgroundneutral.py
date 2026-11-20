@@ -822,7 +822,7 @@ class BackgroundNeutralizationDialog(QDialog):
         self._user_zoomed = True
         cur = self.graphics_view.transform().m11()
         new_scale = cur * factor
-        if new_scale < 1e-6 or new_scale > 8.0:
+        if new_scale < 1e-6 or new_scale > max(8.0, cur):
             return
         center = self.graphics_view.mapToScene(
             self.graphics_view.viewport().rect().center()
