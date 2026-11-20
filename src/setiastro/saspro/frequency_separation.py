@@ -928,7 +928,9 @@ class FrequencySeperationTab(QWidget):
         row_previews = QHBoxLayout()
         row_previews.addWidget(self.scrollHF, 1)
         row_previews.addWidget(self.scrollLF, 1)
-        right.addLayout(row_previews, 1)
+        self.preview_pair = QWidget(self)
+        self.preview_pair.setLayout(row_previews)
+        right.addWidget(self.preview_pair, 1)
 
         right_host = QWidget(self); right_host.setLayout(right)
         main.addWidget(right_host, 1)
@@ -947,6 +949,7 @@ class FrequencySeperationTab(QWidget):
             scale=lambda: self.zoom_factor,
         )
         self.zoom_bar.watch_viewport(self.scrollHF.viewport())
+        self.zoom_bar.preview_content = self.preview_pair
 
     def _try_autoload_active(self) -> bool:
         # 1) DocManager paths

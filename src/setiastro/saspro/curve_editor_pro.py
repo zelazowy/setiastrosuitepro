@@ -1928,6 +1928,9 @@ class CurvesDialogPro(QDialog):
             scale=self._source_zoom, reduced=self._reduced_preview,
         )
         right.addWidget(self.zoom_bar)
+        self.zoom_bar.enable_comparison(
+            lambda before: self.btn_preview.setChecked(not before),
+        )
         top.addLayout(right, 1)
         main.addLayout(top, 1)
 

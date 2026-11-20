@@ -1058,6 +1058,9 @@ class SignatureInsertDialogPro(QDialog):
             actual=lambda: self.view.set_zoom(1.0),
             scale=lambda: abs(self.view.transform().m11()),
         )
+        self.zoom_bar.enable_overlay_comparison(
+            self.scene, lambda: self._comparison_base,
+        )
 
     def _begin_create_insert_from_current(self):
         mb = QMessageBox(self)
@@ -2196,6 +2199,7 @@ class SignatureInsertDialogPro(QDialog):
         bg = QGraphicsPixmapItem(QPixmap.fromImage(qimg))
         bg.setZValue(0)
         self.scene.addItem(bg)
+        self._comparison_base = bg
 
         self._tech_init_catalog()
         if self.cb_tech.isChecked():

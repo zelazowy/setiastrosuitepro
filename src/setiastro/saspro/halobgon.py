@@ -374,12 +374,20 @@ class HaloBGonDialogPro(QDialog):
             actual=lambda: self.view.set_zoom(1.0),
             scale=lambda: abs(self.view.transform().m11()),
         )
+        from setiastro.saspro.widgets.image_utils import numpy_to_qimage
+        self.preview_comparison = self.zoom_bar.enable_pixmap_comparison(
+            lambda: numpy_to_qimage(self._disp_base), self.pix,
+            source_key=lambda: id(self._disp_base),
+        )
 
     def _debounce(self): self._timer.start(180)
 
     def _set_pix(self, rgb):
         q = _qimage_from_rgb01(rgb)
-        self.pix.setPixmap(QPixmap.fromImage(q))
+        pixmap = QPixmap.fromImage(q)
+        if hasattr(self, 'preview_comparison'):
+            pixmap = self.preview_comparison.image(pixmap)
+        self.pix.setPixmap(pixmap)
         self.view.setSceneRect(self.pix.boundingRect())
 
     def _params(self):

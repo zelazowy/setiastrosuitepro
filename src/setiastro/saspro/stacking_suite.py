@@ -7058,6 +7058,9 @@ class SplitPreviewWidget(QWidget):
         dih = int(ih * self._zoom)
         ox  = self._offset.x()
         oy  = self._offset.y()
+        if self.property('sasShowBefore'):
+            p.drawPixmap(ox, oy, diw, dih, self._before)
+            return
 
         split_x = int(self._split * ww)   # widget X of the split line
 
@@ -8055,6 +8058,7 @@ class FlatStrengthPreviewDialog(QDialog):
             ),
             scale=lambda: self.split_view._zoom,
         )
+        self.zoom_bar.enable_canvas_comparison(self.split_view)
 
     # ------------------------------------------------------------------
     def _fit(self):

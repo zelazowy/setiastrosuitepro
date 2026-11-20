@@ -215,6 +215,11 @@ class MorphologyDialogPro(QDialog):
             scale=lambda: abs(self.view.transform().m11()),
             ctrl_wheel=True,
         )
+        from setiastro.saspro.widgets.image_utils import numpy_to_qimage
+        self.preview_comparison = self.zoom_bar.enable_pixmap_comparison(
+            lambda: numpy_to_qimage(self._disp_base), self.pix,
+            source_key=lambda: id(self._disp_base),
+        )
 
     def _debounce(self): self._timer.start(200)
 
@@ -222,7 +227,10 @@ class MorphologyDialogPro(QDialog):
         arr = (np.clip(rgb, 0, 1) * 255).astype(np.uint8)
         h, w, _ = arr.shape
         q = QImage(arr.data, w, h, 3*w, QImage.Format.Format_RGB888)
-        self.pix.setPixmap(QPixmap.fromImage(q))
+        pixmap = QPixmap.fromImage(q)
+        if hasattr(self, 'preview_comparison'):
+            pixmap = self.preview_comparison.image(pixmap)
+        self.pix.setPixmap(pixmap)
         self.scene.setSceneRect(self.pix.boundingRect())
 
     def _params(self):

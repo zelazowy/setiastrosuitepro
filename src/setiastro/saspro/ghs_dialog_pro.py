@@ -777,6 +777,13 @@ class GhsDialogPro(QDialog):
             scale=lambda: self._zoom * ratio(),
             reduced=lambda: ratio() < 0.999,
         )
+        self.btn_toggle_preview.hide()
+        self.preview_comparison = self.zoom_bar.enable_image_comparison(
+            lambda: _float_to_qimage_rgb8(
+                self._display_stretch_for_view(self._full_img)),
+            self._apply_zoom,
+            source_key=lambda: (id(self._full_img), self._display_autostretch),
+        )
 
     # -----------------------------------------------------------------------
     # Function-mode helpers
@@ -1395,7 +1402,9 @@ class GhsDialogPro(QDialog):
 
     def _apply_zoom(self):
         if self._pix is None: return
-        scaled = self._pix.scaled(
+        image = (self.preview_comparison.image(self._pix)
+                 if hasattr(self, 'preview_comparison') else self._pix)
+        scaled = image.scaled(
             self._pix.size() * self._zoom,
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation)

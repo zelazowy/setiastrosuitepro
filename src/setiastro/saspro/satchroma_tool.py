@@ -257,7 +257,7 @@ class _SplitPreviewWidget(QWidget):
 
     def paintEvent(self, event):
         p = QPainter(self)
-        p.fillRect(self.rect(), QColor(25, 25, 28))
+        p.fillRect(self.rect(), self.palette().window())
 
         if self._before is None:
             p.setPen(QColor(100, 100, 110))
@@ -267,6 +267,9 @@ class _SplitPreviewWidget(QWidget):
             return
 
         r = self._img_rect()
+        if self.property('sasShowBefore'):
+            p.drawPixmap(r, self._before, QRectF(self._before.rect()))
+            return
         split_x = r.left() + self._split * r.width()
 
         # Before (left)
@@ -894,6 +897,7 @@ class SatChromaTool(QDialog):
             scale=lambda: self.preview._zoom * ratio(),
             reduced=lambda: ratio() < 0.999,
         )
+        self.zoom_bar.enable_canvas_comparison(self.preview)
     # ── change / debounce ─────────────────────────────────────
 
     def _on_changed(self):

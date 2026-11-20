@@ -730,6 +730,10 @@ class HistogramTransformDialogPro(QDialog):
             scale=lambda: self._zoom * ratio(),
             reduced=lambda: ratio() < 0.999,
         )
+        self.preview_comparison = self.zoom_bar.enable_image_comparison(
+            self._comparison_before_image, self._apply_zoom,
+            source_key=lambda: id(self._preview_base),
+        )
 
     def _on_curve_drag(self, black: float, mid: float, white: float):
         """Called when user drags a handle on the CurveWidget."""
@@ -1105,13 +1109,21 @@ class HistogramTransformDialogPro(QDialog):
         )
 
     # ---------- preview zoom/pan ----------
+    def _comparison_before_image(self):
+        return _to_pixmap(self._preview_base)
+
     def _apply_zoom(self):
         if not hasattr(self, "_base_pm") or self._base_pm is None:
             return
         base_sz = self._base_pm.size()
         w = max(1, int(base_sz.width() * self._zoom))
         h = max(1, int(base_sz.height() * self._zoom))
-        scaled = self._base_pm.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        image = (self.preview_comparison.image(self._base_pm)
+                 if hasattr(self, 'preview_comparison') else self._base_pm)
+        scaled = image.scaled(
+            w, h, Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
         self.lbl_preview.setPixmap(scaled)
         self.lbl_preview.resize(scaled.size())
 

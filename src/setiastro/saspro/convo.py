@@ -471,6 +471,7 @@ class ConvoDeconvoDialog(QDialog):
             actual=self.view.resetTransform,
             scale=lambda: abs(self.view.transform().m11()),
         )
+        self._cmp.use_shared_hold(self.zoom_bar)
 
     def _active_doc(self):
         # 1) If we were given a specific doc (ROI or full), always use that.

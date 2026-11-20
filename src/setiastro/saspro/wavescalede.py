@@ -366,6 +366,12 @@ class WaveScaleDarkEnhancerDialogPro(QDialog):
             scale=lambda: abs(self.view.transform().m11()),
             ctrl_wheel=True,
         )
+        from setiastro.saspro.widgets.image_utils import numpy_to_qimage
+        self.btn_toggle.hide()
+        self.preview_comparison = self.zoom_bar.enable_pixmap_comparison(
+            lambda: numpy_to_qimage(self.original), self.pix,
+            source_key=lambda: id(self.original),
+        )
 
     def _combine_with_doc_mask(self, op_mask: np.ndarray | None) -> np.ndarray | None:
         doc_m = self._get_doc_active_mask_2d()
@@ -448,7 +454,10 @@ class WaveScaleDarkEnhancerDialogPro(QDialog):
         arr = (np.clip(rgb, 0, 1) * 255).astype(np.uint8)
         h, w, _ = arr.shape
         q = QImage(arr.data, w, h, 3*w, QImage.Format.Format_RGB888)
-        self.pix.setPixmap(QPixmap.fromImage(q))
+        pixmap = QPixmap.fromImage(q)
+        if hasattr(self, 'preview_comparison'):
+            pixmap = self.preview_comparison.image(pixmap)
+        self.pix.setPixmap(pixmap)
         self.view.setSceneRect(self.pix.boundingRect())
 
     # --- toggle ---

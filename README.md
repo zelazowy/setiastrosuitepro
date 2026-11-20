@@ -421,7 +421,8 @@ python setiastrosuitepro.py
 ### Preview Zoom
 
 Image previews throughout the processing, inspection and stacking tools share
-zoom out, zoom in, 100%, Fit and a current-percentage readout. This includes
+zoom out, zoom in, 100%, Fit and a current-percentage readout below the image,
+with a consistent opaque dark background. This includes
 stretching, color adjustments, detail tools, masks, image comparisons, planetary
 previews and the reusable image-preview dialog. Use Command on macOS or Ctrl
 on Windows/Linux:
@@ -448,6 +449,12 @@ to zoom, so ordinary scrolling preserves Fit mode.
 
 See [preview zoom QA](docs/preview_zoom_qa.md) for automated coverage and the
 remaining manual checks.
+
+Hold Space or the common Hold to compare button to show the original in tools
+with before/after comparison; release to restore the result or selected comparison
+mode. Space remains available for text entry and existing SER/Blink selection.
+See [shared previews](docs/shared_previews.md) for supported comparison tools,
+the reusable API and the manual review launcher.
 
 ## Dependency Management
 

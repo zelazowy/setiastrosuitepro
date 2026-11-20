@@ -847,6 +847,7 @@ class MultiscaleDecompDialog(QDialog):
             },
             scale=lambda: abs(self.view.transform().m11()),
         )
+        self._cmp.use_shared_hold(self.zoom_bar)
 
     # ---------- preset (grip / headless) ----------
     def _multiscale_params(self) -> dict:

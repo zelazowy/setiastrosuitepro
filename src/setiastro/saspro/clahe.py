@@ -10,7 +10,8 @@ from PyQt6.QtCore import (
     pyqtSignal, pyqtSlot
 )
 from PyQt6.QtGui import (
-    QImage, QPixmap, QIcon, QCursor, QPen, QBrush, QColor, QPainterPath, QTransform
+    QImage, QPixmap, QIcon, QCursor, QPen, QBrush, QColor, QPainter,
+    QPainterPath, QTransform
 )
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGroupBox, QGridLayout,
@@ -364,6 +365,7 @@ class CLAHEDialogPro(QDialog):
         self._pm_before = None
         self._pm_after = None
         self._pm_sbs = None
+        self._pm_before_sbs = None
         self._refit_pending = False
 
         root = QVBoxLayout(self)
@@ -543,16 +545,8 @@ class CLAHEDialogPro(QDialog):
             b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             self.grp_mode.addButton(b, mid)
             bar.addWidget(b)
-        self.grp_mode.button(_MODE_SPLIT).setChecked(True)
+        self.grp_mode.button(_MODE_AFTER).setChecked(True)
         self.grp_mode.idClicked.connect(self._on_mode_changed)
-
-        self.btn_hold = QToolButton()
-        self.btn_hold.setText(self.tr("Hold to compare"))
-        self.btn_hold.setToolTip(self.tr("Press and hold (or hold Space) to peek at the original"))
-        self.btn_hold.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_hold.pressed.connect(lambda: self._set_hold(True))
-        self.btn_hold.released.connect(lambda: self._set_hold(False))
-        bar.addSpacing(12); bar.addWidget(self.btn_hold)
 
         self.lbl_split = QLabel(self.tr("Divider:"))
         self.s_split = QSlider(Qt.Orientation.Horizontal)
@@ -631,6 +625,7 @@ class CLAHEDialogPro(QDialog):
             fit=lambda: self.view.fit_to_item(self.pix),
             scale=self._view_scale, ctrl_wheel=True,
         )
+        self.btn_hold = self.zoom_bar.enable_comparison(self._set_hold).button
         z.addWidget(self.zoom_bar, 1)
         z.addWidget(self.lbl_status)
         v.addLayout(z)
@@ -684,7 +679,8 @@ class CLAHEDialogPro(QDialog):
             self.chk_stretch.blockSignals(True)
             self.chk_stretch.setChecked(s.value(f"{self._SKEY}/autostretch", False, type=bool))
             self.chk_stretch.blockSignals(False)
-            btn = self.grp_mode.button(int(s.value(f"{self._SKEY}/mode", _MODE_SPLIT)))
+            mode = int(s.value(f"{self._SKEY}/mode", _MODE_AFTER))
+            btn = self.grp_mode.button(mode)
             if btn is not None:
                 btn.setChecked(True)
             self._split_frac = max(0.0, min(1.0, float(s.value(f"{self._SKEY}/split", 0.5))))
@@ -746,6 +742,7 @@ class CLAHEDialogPro(QDialog):
         self._pm_before = None
         self._pm_after = None
         self._pm_sbs = None
+        self._pm_before_sbs = None
         self.doc = None
         try:
             self.pix.setPixmap(QPixmap())
@@ -847,7 +844,8 @@ class CLAHEDialogPro(QDialog):
         self._mask_ready = False
         self._stf = None
         self._last_sig = None
-        self._pm_before = self._pm_after = self._pm_sbs = None
+        self._pm_before = self._pm_after = None
+        self._pm_sbs = self._pm_before_sbs = None
         self._refit_pending = False
 
     def _update_preview(self):
@@ -899,9 +897,10 @@ class CLAHEDialogPro(QDialog):
 
     # ---------------- composition ----------------
     def _mode(self) -> int:
-        if self._hold_before:
+        mode = int(self.grp_mode.checkedId())
+        if self._hold_before and mode != _MODE_SBS:
             return _MODE_BEFORE
-        return int(self.grp_mode.checkedId())
+        return mode
 
     def _view_scale(self) -> float:
         try:
@@ -921,7 +920,8 @@ class CLAHEDialogPro(QDialog):
         Mode switches, hold-to-compare and divider drags then touch no pixels.
         """
         if self._preview is None:
-            self._pm_before = self._pm_after = self._pm_sbs = None
+            self._pm_before = self._pm_after = None
+            self._pm_sbs = self._pm_before_sbs = None
             return
         before = self._disp_base
         after = _to_rgb(self._preview)
@@ -934,6 +934,7 @@ class CLAHEDialogPro(QDialog):
         self._pm_before = self._pixmap_from(before)
         self._pm_after = self._pixmap_from(after)
         self._pm_sbs = None
+        self._pm_before_sbs = None
         self._pix_after.setPixmap(self._pm_after)
 
     def _set_pix(self, rgb):
@@ -964,7 +965,19 @@ class CLAHEDialogPro(QDialog):
             return
         mode = self._mode()
         split = (mode == _MODE_SPLIT)
-        if mode == _MODE_SBS:
+        if mode == _MODE_SBS and self._hold_before:
+            if self._pm_before_sbs is None:
+                width = self._pm_before.width()
+                height = self._pm_before.height()
+                original_pair = QPixmap(width * 2 + 4, height)
+                original_pair.fill(Qt.GlobalColor.black)
+                painter = QPainter(original_pair)
+                painter.drawPixmap(0, 0, self._pm_before)
+                painter.drawPixmap(width + 4, 0, self._pm_before)
+                painter.end()
+                self._pm_before_sbs = original_pair
+            self.pix.setPixmap(self._pm_before_sbs)
+        elif mode == _MODE_SBS:
             if self._pm_sbs is None and self._preview is not None:
                 before = self._disp_base
                 after = _to_rgb(self._preview)
@@ -1087,16 +1100,6 @@ class CLAHEDialogPro(QDialog):
             return
         self._hold_before = on
         self._compose_and_show()
-
-    def keyPressEvent(self, ev):
-        if ev.key() == Qt.Key.Key_Space and not ev.isAutoRepeat():
-            self._set_hold(True); ev.accept(); return
-        super().keyPressEvent(ev)
-
-    def keyReleaseEvent(self, ev):
-        if ev.key() == Qt.Key.Key_Space and not ev.isAutoRepeat():
-            self._set_hold(False); ev.accept(); return
-        super().keyReleaseEvent(ev)
 
     def eventFilter(self, obj, ev):
         """Drag the split divider directly in the preview.

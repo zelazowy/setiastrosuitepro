@@ -50,6 +50,7 @@ def test_migrated_image_tools(
     dialog.show()
     QTest.qWait(200)
     bar = dialog.zoom_bar
+    assert bar.preview_pane is not None
 
     def press(sequence):
         dialog.activateWindow()
@@ -132,6 +133,7 @@ def test_special_preview_renderers(
     dialog.show()
     QTest.qWait(100)
     bar = dialog.zoom_bar
+    assert bar.preview_pane is not None
 
     def press(sequence):
         dialog.activateWindow()
@@ -178,6 +180,7 @@ def test_keeper_blink_zoom_tracks_fitted_frame(qapp, monkeypatch):
     dialog.show()
     QTest.qWait(50)
     bar = dialog.zoom_bar
+    assert bar.preview_pane is not None
     try:
         bar.actions_by_name['fit'].trigger()
         fitted = bar._scale()
@@ -221,6 +224,7 @@ def test_frequency_previews_remain_linked(qapp):
     QTest.qWait(50)
     try:
         bar = dialog.zoom_bar
+        assert bar.preview_pane is not None
         bar.actions_by_name['actual'].trigger()
         bar.actions_by_name['in'].trigger()
         assert dialog.labelHF.pixmap().width() == 2000

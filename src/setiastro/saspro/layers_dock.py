@@ -163,7 +163,7 @@ class _PreviewCanvas(QWidget):
 
     def paintEvent(self, event):
         p = QPainter(self)
-        p.fillRect(self.rect(), QColor(25, 25, 28))
+        p.fillRect(self.rect(), self.palette().window())
 
         src = self._before or self._after
         if src is None:
@@ -175,6 +175,9 @@ class _PreviewCanvas(QWidget):
 
         r = self._img_rect()
 
+        if self.property('sasShowBefore') and self._before is not None:
+            p.drawPixmap(r, self._before, QRectF(self._before.rect()))
+            return
         if not self._split_mode or self._before is None or self._after is None:
             # Single-view: show after (or before if after missing)
             pm = self._after if self._after is not None else self._before
@@ -367,6 +370,7 @@ class LayersPreviewWindow(QDialog):
             actual=lambda: self._actual_preview_size(),
             scale=lambda: self.canvas._zoom,
         )
+        self.zoom_bar.enable_canvas_comparison(self.canvas)
 
     def _actual_preview_size(self):
         self.canvas._zoom_around(1.0 / max(self.canvas._zoom, 1e-9),

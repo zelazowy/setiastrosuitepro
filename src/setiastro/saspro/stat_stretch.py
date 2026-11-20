@@ -455,6 +455,10 @@ class StatisticalStretchDialog(QDialog):
             actual=self._zoom_reset_100, fit=self._fit_preview,
             scale=self._source_zoom, reduced=self._reduced_preview,
         )
+        self.preview_comparison = self.zoom_bar.enable_image_comparison(
+            self._comparison_before_image, self._update_preview_scaled,
+            source_key=lambda: id(getattr(self._target_doc(), 'image', None)),
+        )
         right.addWidget(self.zoom_bar)
 
         main_lay = QHBoxLayout(self)
@@ -1649,13 +1653,20 @@ class StatisticalStretchDialog(QDialog):
             self._save_window_geometry()
         super().closeEvent(ev)
 
+    def _comparison_before_image(self):
+        from setiastro.saspro.widgets.image_utils import numpy_to_qimage
+        if getattr(self._target_doc(), 'image', None) is None:
+            return QImage()
+        return numpy_to_qimage(self._get_source_float())
+
     def _update_preview_scaled(self):
         if self._preview_qimg is None:
             self.preview_label.clear()
             return
         sw = max(1, int(self._preview_qimg.width()  * self._preview_scale))
         sh = max(1, int(self._preview_qimg.height() * self._preview_scale))
-        scaled = self._preview_qimg.scaled(
+        image = self.preview_comparison.image(self._preview_qimg)
+        scaled = image.scaled(
             sw, sh,
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation

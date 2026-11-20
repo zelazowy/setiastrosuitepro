@@ -398,6 +398,7 @@ class BackgroundNeutralizationDialog(QDialog):
             scale=lambda: self.graphics_view.transform().m11(),
         )
         layout.insertWidget(2, self.zoom_bar)
+        self.zoom_bar.enable_comparison(self._show_comparison_before)
 
         # --- preset drag handle (grip) ---
         try:
@@ -485,6 +486,8 @@ class BackgroundNeutralizationDialog(QDialog):
             qimg = QImage((disp * 255).astype(np.uint8).tobytes(), w, h, 3 * w, QImage.Format.Format_RGB888)
 
         pix = QPixmap.fromImage(qimg)
+        self._before_pixmap = pix
+        self._after_pixmap = pix
 
         # Add to scene; force scene rect to native image pixels and place at (0,0)
         self.scene.clear()
@@ -500,9 +503,37 @@ class BackgroundNeutralizationDialog(QDialog):
         self._user_zoomed = False
 
     def _toggle_auto_stretch(self):
+        preset = self.get_preset() if self.selection_item is not None else None
         self.auto_stretch = not self.auto_stretch
         self.btn_toggle_stretch.setText("Toggle Auto-Stretch")
         self._load_image()
+        if preset is not None:
+            self.seed_from_preset(preset)
+
+    def _show_comparison_before(self, before):
+        item = getattr(self, 'pixmap_item', None)
+        if item is not None:
+            pixmap = self._before_pixmap if before else self._after_pixmap
+            item.setPixmap(pixmap)
+
+    def _refresh_neutralization_preview(self):
+        if self.selection_item is None:
+            return
+        image = self._doc_image_normalized()
+        if image.ndim != 3 or image.shape[2] != 3:
+            return
+        rect = self._scene_rect_to_image_rect()
+        out = background_neutralize_rgb(image, rect)
+        mask = _active_mask_array_from_doc(self.doc)
+        if mask is not None:
+            out = image * (1.0 - mask[..., None]) + out * mask[..., None]
+        if self.auto_stretch:
+            out = stretch_color_image(
+                out, 0.25, linked=False, normalize=False,
+            )
+        from setiastro.saspro.widgets.image_utils import numpy_to_qimage
+        self._after_pixmap = QPixmap.fromImage(numpy_to_qimage(out))
+        self._show_comparison_before(self.zoom_bar.comparison.showing_before)
 
     # ---------- zoom ----------
     def eventFilter(self, source, event):
@@ -534,6 +565,7 @@ class BackgroundNeutralizationDialog(QDialog):
                 else:
                     pen = QPen(QColor(255, 0, 0), 2, Qt.PenStyle.SolidLine)
                     self.selection_item = self.scene.addRect(self.current_rect_scene, pen)
+                    self._refresh_neutralization_preview()
         return super().eventFilter(source, event)
 
     def _make_screen_stable_crosshair_group(self, cx: float, cy: float, color: QColor | None = None):
@@ -602,6 +634,7 @@ class BackgroundNeutralizationDialog(QDialog):
 
         self.scene.update()
         self.graphics_view.viewport().update()
+        self._refresh_neutralization_preview()
 
     def _scene_rect_to_image_rect(self) -> tuple[int, int, int, int]:
         if not self.current_rect_scene or self.current_rect_scene.isNull():
@@ -692,6 +725,7 @@ class BackgroundNeutralizationDialog(QDialog):
         pen = QPen(QColor(255, 0, 0), 2, Qt.PenStyle.SolidLine)
         pen.setCosmetic(True)
         self.selection_item = self.scene.addRect(self.current_rect_scene, pen)
+        self._refresh_neutralization_preview()
 
     def _on_apply(self):
         try:

@@ -1431,6 +1431,10 @@ class PixelMathDialogPro(QDialog):
             scale=lambda: abs(self.preview_view.transform().m11()),
             ctrl_wheel=True,
         )
+        self.preview_comparison = self.zoom_bar.enable_image_comparison(
+            self._comparison_before_image, self._redraw_comparison,
+            source_key=lambda: id(self.doc.image),
+        )
 
     # ─────────────── Auto-stretch prefs ───────────────
     def _as_settings(self):
@@ -1513,6 +1517,7 @@ class PixelMathDialogPro(QDialog):
         """Render numpy float image into the preview scene, preserving zoom/pan."""
         qim = _float_to_qimage_rgb8(img)
         pm  = QPixmap.fromImage(qim)
+        pm = self.preview_comparison.image(pm)
 
         # --- capture current view state (before we clear/replace) ---
         view = self.preview_view
@@ -1545,6 +1550,15 @@ class PixelMathDialogPro(QDialog):
             view.centerOn(new_center)
 
         self.preview_view.viewport().update()    
+
+    def _comparison_before_image(self):
+        from setiastro.saspro.widgets.preview import source_preview_image
+        return source_preview_image(self.doc.image)
+
+    def _redraw_comparison(self):
+        if self._preview_item is not None:
+            comparison = self.preview_comparison
+            self._preview_item.setPixmap(comparison.image(comparison.result))
 
     def _zoom_by(self, factor: float):
         if self._preview_item is None:

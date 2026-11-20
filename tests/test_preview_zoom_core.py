@@ -146,7 +146,8 @@ def test_adopted_controls_preserve_wiring_and_busy_state(qapp):
     assert calls == ['in', 'out', 'in']
     assert bar.buttons_by_name == buttons
     assert buttons['actual'].text() == '100%'
-    assert row.count() == 1
+    assert row.count() == 0
+    assert bar.preview_pane.zoom_bar is bar
     bar.hide()  # Collapsed settings must leave viewport shortcuts available.
     QTest.keySequence(viewport, QKeySequence('Ctrl++'))
     assert calls == ['in', 'out', 'in', 'in']

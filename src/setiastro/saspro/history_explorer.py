@@ -1045,41 +1045,44 @@ class HistoryImagePreview(QWidget):
 
         help_lbl = QLabel(
             "Left-click + drag: move before/after divider  •  "
-            "Middle-click + drag, or hold Space + left-click + drag: pan image  •  "
-            "Ctrl+wheel: zoom"
+            "Middle-click + drag, or Shift+Space + left-click + drag: "
+            "pan image  •  "
+            "Hold Space: Before; release: After  •  Ctrl+wheel: zoom"
         )
         help_lbl.setWordWrap(True)
         v.addWidget(help_lbl)
 
-        self.slider_widget = ComparisonSlider(self.image_data, cur, parent=win)
-        v.addWidget(self.slider_widget, 1)
+        slider_widget = ComparisonSlider(self.image_data, cur, parent=win)
+        v.addWidget(slider_widget, 1)
 
         bar = QHBoxLayout()
         b_out = QPushButton("Zoom Out"); b_in = QPushButton("Zoom In")
         b_fit = QPushButton("Fit"); b_1  = QPushButton("1:1")
         b_st  = QPushButton("Toggle AutoStretch")
-        b_out.clicked.connect(self.slider_widget.zoom_out)
-        b_in.clicked.connect(self.slider_widget.zoom_in)
-        b_fit.clicked.connect(self.slider_widget.fit_to_view)
-        b_1.clicked.connect(lambda: self.slider_widget.set_zoom(1.0))
-        b_st.clicked.connect(self.slider_widget.toggle_autostretch)
+        b_out.clicked.connect(slider_widget.zoom_out)
+        b_in.clicked.connect(slider_widget.zoom_in)
+        b_fit.clicked.connect(slider_widget.fit_to_view)
+        b_1.clicked.connect(lambda: slider_widget.set_zoom(1.0))
+        b_st.clicked.connect(slider_widget.toggle_autostretch)
 
         bar.addWidget(b_out); bar.addWidget(b_in); bar.addWidget(b_fit); bar.addWidget(b_1)
         bar.addStretch(1); bar.addWidget(b_st)
         v.addLayout(bar)
 
         win.show()
-        self.slider_widget.setFocus()
+        slider_widget.setFocus()
         mw = self._find_main_window()
         if mw and hasattr(mw, "_log"):
             mw._log("History: opened Compare with Current.")
 
         win.zoom_bar = PreviewZoomBar.replace(
             win,
-            self.slider_widget,
+            slider_widget,
             buttons={'out': b_out, 'in': b_in, 'fit': b_fit, 'actual': b_1},
-            scale=lambda: self.slider_widget.zoom,
+            scale=lambda: slider_widget.zoom,
         )
+
+        win.zoom_bar.enable_canvas_comparison(slider_widget)
 
     def _restore(self):
         try:
@@ -1227,6 +1230,9 @@ class ComparisonSlider(QWidget):
                                  Qt.TransformationMode.SmoothTransformation)
         ox = (W - b.width()) // 2 + int(self.pan_x)
         oy = (H - b.height()) // 2 + int(self.pan_y)
+        if self.property('sasShowBefore'):
+            p.drawImage(ox, oy, b)
+            return
         cut = int(W * self.slider_pos)
 
         p.save(); p.setClipRect(0, 0, cut, H); p.drawImage(ox, oy, b); p.restore()

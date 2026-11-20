@@ -1346,6 +1346,7 @@ class AstroSpikeWindow(QDialog):
             ),
             scale=lambda: self.canvas.scale,
         )
+        self.zoom_bar.enable_canvas_comparison(self.canvas)
         
     def detect_stars(self):
         if self.image_data is None:
@@ -1777,7 +1778,7 @@ class CanvasPreview(QWidget):
     def paintEvent(self, event: QPaintEvent):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.fillRect(self.rect(), QColor(10, 10, 12))
+        painter.fillRect(self.rect(), self.palette().window())
         
         if not self.image:
             painter.setPen(QColor(100, 100, 100))
@@ -1790,6 +1791,8 @@ class CanvasPreview(QWidget):
         
         target_rect = QRectF(0, 0, self.image.width(), self.image.height())
         painter.drawImage(target_rect, self.image)
+        if self.property('sasShowBefore'):
+            return
         
         if self.config:
             self.renderer.render(painter, self.image.width(), self.image.height(), self.stars, self.config)

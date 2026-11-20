@@ -2,8 +2,11 @@
 import sys
 
 import pytest
+from PyQt6.QtCore import Qt
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QDialog, QLineEdit, QVBoxLayout
+from PyQt6.QtWidgets import (
+    QApplication, QDialog, QLabel, QLineEdit, QVBoxLayout,
+)
 
 from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 
@@ -98,6 +101,21 @@ def test_windows_native_zoom_keys(qapp, layout):
 
     try:
         assert user32.ActivateKeyboardLayout(keyboard_layout, 0)
+        before_calls = []
+        bar.enable_comparison(before_calls.append)
+        press([0x20])  # Space must still type into a focused text field.
+        assert edit.text() == ' '
+        assert before_calls == []
+        image = QLabel('Preview', window)
+        image.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        row.addWidget(image)
+        image.show()
+        image.setFocus()
+        QTest.qWait(100)
+        press([0x20])  # Real native press/release, through the app dispatcher.
+        assert before_calls == [True, False]
+        edit.setFocus()
+
         for keys, expected in (
             ([0x11, 0x30], 'fit'),        # Ctrl+0
             ([0x11, 0x31], 'actual'),     # Ctrl+1

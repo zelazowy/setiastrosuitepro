@@ -339,6 +339,10 @@ class RemovePedestalDialog(QDialog):
             scale=lambda: self._zoom * ratio(),
             reduced=lambda: ratio() < 0.999,
         )
+        self.preview_comparison = self.zoom_bar.enable_image_comparison(
+            self._comparison_before_image, self._apply_zoom,
+            source_key=lambda: id(self.doc.image),
+        )
 
     # --- mode label helper -------------------------------------------------
     def _mode_label(self, mode: str) -> str:
@@ -565,10 +569,18 @@ class RemovePedestalDialog(QDialog):
         self._pix = QPixmap.fromImage(qimg)
         self._apply_zoom()
 
+    def _comparison_before_image(self):
+        image = self.doc.image
+        if self.chk_autostretch.isChecked():
+            image = self._autostretch_for_display(image)
+        return _as_qimage_rgb8(_to_float01(image))
+
     def _apply_zoom(self):
         if self._pix is None:
             return
-        scaled = self._pix.scaled(self._pix.size() * self._zoom,
+        image = (self.preview_comparison.image(self._pix)
+                 if hasattr(self, 'preview_comparison') else self._pix)
+        scaled = image.scaled(self._pix.size() * self._zoom,
                                   Qt.AspectRatioMode.KeepAspectRatio,
                                   Qt.TransformationMode.SmoothTransformation)
         self.label.setPixmap(scaled)

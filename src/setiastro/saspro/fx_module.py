@@ -806,6 +806,13 @@ class FXDialog(QDialog):
             scale=lambda: self._zoom * ratio(),
             reduced=lambda: ratio() < 0.999,
         )
+        self.btn_toggle.hide()
+        self.preview_comparison = self.zoom_bar.enable_image_comparison(
+            lambda: self._pix_original,
+            lambda: self._show_pixmap(
+                self._pix_processed or self._pix_original),
+            source_key=lambda: id(self._pix_original),
+        )
         right.insertWidget(1, self.zoom_bar)
 
     # ── effect selection / dynamic controls ───────────────────────────────────
@@ -984,6 +991,8 @@ class FXDialog(QDialog):
             QTimer.singleShot(0, self._fit)
 
     def _show_pixmap(self, pix: QPixmap):
+        if pix is not None and hasattr(self, 'preview_comparison'):
+            pix = self.preview_comparison.image(pix)
         scaled = pix.scaled(
             pix.size() * self._zoom,
             Qt.AspectRatioMode.KeepAspectRatio,

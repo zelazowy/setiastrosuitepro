@@ -1,14 +1,14 @@
-name: Preview zoom QA
+name: Image preview QA
 
 on:
   pull_request:
     paths:
       - 'src/setiastro/saspro/**'
-      - 'tests/test_preview_zoom*.py'
+      - 'tests/test_preview*.py'
       - 'requirements.txt'
       - '.github/workflows/preview-zoom.yml'
   push:
-    branches: ['feat/preview-zoom-controls']
+    branches: ['feat/preview-zoom-controls', 'feat/unified-previews']
   workflow_dispatch:
 
 permissions:
@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   zoom-tests:
-    name: Preview zoom (${{ matrix.os }})
+    name: Image previews (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
@@ -44,11 +44,11 @@ jobs:
       - name: Install application and test dependencies
         run: python -m pip install -r requirements.txt pytest
       - name: Test zoom controls and migrated renderers
-        run: python -m pytest -q tests/test_preview_zoom_core.py tests/test_preview_zoom.py tests/test_preview_zoom_migration.py tests/test_preview_zoom_native.py --junitxml=zoom-results.xml
+        run: python -m pytest -q tests/test_preview_zoom_core.py tests/test_preview_zoom.py tests/test_preview_zoom_migration.py tests/test_preview_zoom_native.py tests/test_preview_comparison.py tests/test_preview_comparison_tools.py --junitxml=zoom-results.xml
       - name: Repeat shared controls with display scaling
         env:
           QT_SCALE_FACTOR: '2'
-        run: python -m pytest -q tests/test_preview_zoom_core.py
+        run: python -m pytest -q tests/test_preview_zoom_core.py tests/test_preview_comparison.py
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4

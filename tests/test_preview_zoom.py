@@ -39,6 +39,7 @@ def test_tool_zoom_is_source_scaled_and_non_destructive(
     dialog.activateWindow()
     QTest.qWait(200)
     bar = dialog.zoom_bar
+    assert bar.preview_pane is not None
 
     def press(keys):
         dialog.activateWindow()
@@ -186,6 +187,7 @@ def test_zoom_steps_after_fitting_tiny_image(
     QTest.qWait(200)
     try:
         bar = dialog.zoom_bar
+        assert bar.preview_pane is not None
         bar.actions_by_name['fit'].trigger()
         QTest.qWait(50)
         fitted = bar._scale()

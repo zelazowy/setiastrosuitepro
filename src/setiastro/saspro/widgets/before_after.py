@@ -332,6 +332,11 @@ class BeforeAfterCompare(QObject):
         self._hold = on
         self._apply()
 
+    def use_shared_hold(self, zoom_bar):
+        """Use the common Space scope and compare button beside zoom."""
+        self._shared_hold = zoom_bar.enable_comparison(self.set_hold)
+        self._btn_hold.hide()
+
     def detach(self):
         """Stop listening and drop the before pixmap. Call from closeEvent,
         before anything clears the scene; every other call is a no-op after."""
@@ -444,9 +449,11 @@ class BeforeAfterCompare(QObject):
         try:
             et = ev.type()
             if obj is self._host:
-                if et in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease) \
-                        and ev.key() == Qt.Key.Key_Space and not ev.isAutoRepeat() \
-                        and self._has_before:
+                if (not hasattr(self, '_shared_hold')
+                        and et in (QEvent.Type.KeyPress,
+                                   QEvent.Type.KeyRelease)
+                        and ev.key() == Qt.Key.Key_Space
+                        and not ev.isAutoRepeat() and self._has_before):
                     self.set_hold(et == QEvent.Type.KeyPress)
                     return True
                 if et == QEvent.Type.WindowDeactivate:

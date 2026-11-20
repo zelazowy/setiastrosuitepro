@@ -3,7 +3,7 @@ import itertools
 import weakref
 
 from PyQt6 import sip
-from PyQt6.QtCore import QEvent, QTimer, Qt
+from PyQt6.QtCore import QEvent, QKeyCombination, QTimer, Qt
 from PyQt6.QtGui import QAction, QIcon, QKeySequence
 from PyQt6.QtWidgets import (
     QAbstractButton, QApplication, QBoxLayout, QHBoxLayout, QLabel,
@@ -38,6 +38,7 @@ class PreviewZoomBar(QWidget):
         self._fit_pending = False
         self.actions_by_name = {}
         self.buttons_by_name = {}
+        self.visible_buttons_by_name = {}
         buttons = buttons or {}
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
@@ -71,6 +72,7 @@ class PreviewZoomBar(QWidget):
             if button is None:
                 button = QToolButton(self)
                 button.setDefaultAction(action)
+                visible_button = button
             else:
                 # Keep the tool's connections and enabled state when adopting
                 # existing controls, including linked previews and busy states.
@@ -84,14 +86,20 @@ class PreviewZoomBar(QWidget):
                     lambda checked=False, fitting=(name == 'fit'):
                     self._adopted_clicked(fitting)
                 )
-            if isinstance(button, QToolButton):
-                button.setToolButtonStyle(
-                    Qt.ToolButtonStyle.ToolButtonTextBesideIcon
-                )
+                # Keep legacy references/signals for renderer busy states,
+                # and present the same toolbar buttons in every preview.
+                button.hide()
+                visible_button = QToolButton(self)
+                visible_button.setDefaultAction(action)
+            visible_button.setToolButtonStyle(
+                Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+            )
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            row.addWidget(button)
+            visible_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            row.addWidget(visible_button)
             self.actions_by_name[name] = action
             self.buttons_by_name[name] = button
+            self.visible_buttons_by_name[name] = visible_button
         self.label = QLabel(self)
         row.addWidget(self.label)
         row.addStretch(1)
@@ -102,6 +110,54 @@ class PreviewZoomBar(QWidget):
         self._timer.setInterval(150)
         self._timer.timeout.connect(self.refresh)
         self._timer.start()
+        self.preview_pane = None
+        self.preview_content = None
+        self.refresh()
+        QTimer.singleShot(0, self._mount_preview)
+
+    def _mount_preview(self):
+        from .preview import PreviewPane, style_preview
+        if sip.isdeleted(self) or sip.isdeleted(self._host):
+            return
+        self.preview_pane = PreviewPane.mount(
+            self._viewport, self, self.preview_content,
+        )
+        for viewport in self._viewports:
+            if not sip.isdeleted(viewport):
+                style_preview(viewport)
+
+    def enable_comparison(self, show_before):
+        """Attach shared Space/button hold behavior to a cached renderer."""
+        from .preview import HoldPreview
+        self.comparison = HoldPreview(self, show_before)
+        return self.comparison
+
+    def enable_image_comparison(self, before_image, redraw, source_key=None):
+        """Compare cached QImages without changing processing/zoom state."""
+        from .preview import CachedImageComparison
+        return CachedImageComparison(self, before_image, redraw, source_key)
+
+    def enable_pixmap_comparison(self, before_image, item, source_key=None):
+        """Compare a graphics pixmap without changing its transform."""
+        comparison = self.enable_image_comparison(
+            before_image,
+            lambda: item.setPixmap(comparison.image(comparison.result)),
+            source_key,
+        )
+        comparison.result = item.pixmap()
+        return comparison
+
+    def enable_canvas_comparison(self, canvas):
+        """Let a custom painter display its cached original in place."""
+        def show_before(before):
+            canvas.setProperty('sasShowBefore', before)
+            canvas.update()
+        return self.enable_comparison(show_before)
+
+    def enable_overlay_comparison(self, scene, base_item):
+        """Temporarily hide compositing overlays above a source image."""
+        from .preview import SceneOverlayComparison
+        return SceneOverlayComparison(self, scene, base_item)
 
     @classmethod
     def replace(cls, host, viewport, *, buttons, scale, actual=None,
@@ -199,7 +255,7 @@ class PreviewZoomBar(QWidget):
             return
         for name, button in self.buttons_by_name.items():
             if (isinstance(button, QToolButton)
-                    and button.defaultAction() is not None):
+                    and button.defaultAction() is self.actions_by_name[name]):
                 continue
             self.actions_by_name[name].setEnabled(button.isEnabled())
         if not self.isVisible():
@@ -267,8 +323,12 @@ class PreviewZoomBar(QWidget):
         # with the main image window. Route only events inside this tool.
         key_events = (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress)
         if (event.type() in key_events
-                and self._handles_keys(obj)):
-            sequence = QKeySequence(event.keyCombination())
+                and self._has_visible_viewport() and self._handles_keys(obj)):
+            # Numeric-pad keys are the same zoom commands. Native backends
+            # differ in whether shortcut matching removes KeypadModifier.
+            combination = event.keyCombination().toCombined()
+            combination &= ~Qt.KeyboardModifier.KeypadModifier.value
+            sequence = QKeySequence(QKeyCombination.fromCombined(combination))
             self.refresh()
             for action in self.actions_by_name.values():
                 if any(sequence.matches(key)

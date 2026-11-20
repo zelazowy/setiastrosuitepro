@@ -2400,6 +2400,11 @@ class ABEDialog(QDialog):
             zoom_out=self.zoom_out, actual=self._zoom_actual,
             fit=self.fit_to_preview, scale=lambda: self._preview_scale,
         )
+        self.preview_comparison = self.zoom_bar.enable_image_comparison(
+            self._comparison_before_image, self._redraw_comparison,
+            source_key=lambda: (id(getattr(self.doc, 'image', None)),
+                                self._autostretch_on),
+        )
         bar.addWidget(self.zoom_bar, 1)
 
         # Use a plain QToolButton so it is always visible even if the theme icon is missing.
@@ -3576,7 +3581,21 @@ class ABEDialog(QDialog):
         self._update_preview_scaled()
         self._redraw_overlay()
 
+    def _comparison_before_image(self):
+        from setiastro.saspro.widgets.image_utils import numpy_to_qimage
+        if getattr(self.doc, 'image', None) is None:
+            return QImage()
+        source = self._get_source_float()
+        if self._autostretch_on:
+            source = hard_autostretch(
+                source, target_median=0.5, sigma=2,
+                linked=False, use_24bit=True,
+            )
+        return numpy_to_qimage(source)
 
+    def _redraw_comparison(self):
+        self._update_preview_scaled()
+        self._redraw_overlay()
 
     def _update_preview_scaled(self):
         try:
@@ -3592,7 +3611,8 @@ class ABEDialog(QDialog):
         sw = max(1, int(self._preview_qimg.width()  * self._preview_scale))
         sh = max(1, int(self._preview_qimg.height() * self._preview_scale))
 
-        scaled = self._preview_qimg.scaled(
+        image = self.preview_comparison.image(self._preview_qimg)
+        scaled = image.scaled(
             sw, sh,
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation
