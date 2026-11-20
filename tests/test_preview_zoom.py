@@ -4,7 +4,8 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMainWindow
 
 
-@pytest.fixture(scope='module')
+# Keep one QApplication alive while Qt widgets and callbacks span test modules.
+@pytest.fixture(scope='session')
 def qapp():
     return QApplication.instance() or QApplication([])
 

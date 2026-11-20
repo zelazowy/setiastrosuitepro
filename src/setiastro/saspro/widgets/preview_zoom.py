@@ -128,7 +128,7 @@ class PreviewZoomBar(QWidget):
         self.refresh()
 
     def enable_comparison(self, show_before):
-        """Attach shared Space/button hold behavior to a cached renderer."""
+        """Attach shared Space hold behavior to a cached renderer."""
         from .preview import HoldPreview
         self.comparison = HoldPreview(self, show_before)
         return self.comparison
