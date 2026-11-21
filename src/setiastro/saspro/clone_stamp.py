@@ -1,6 +1,7 @@
 #src/setiastro/saspro/clone_stamp.py
 from __future__ import annotations
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import numpy as np
 from typing import Optional, Tuple
 
@@ -384,6 +385,18 @@ class CloneStampDialogPro(QDialog):
         self._update_brush_preview()
         self._update_display_autostretch()
         self._fit_view()
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_zoom_fit,
+            },
+            actual=lambda: self._set_zoom(1.0),
+            scale=lambda: abs(self.view.transform().m11()),
+        )
 
     def _make_stretched_buffer(self, src: np.ndarray) -> np.ndarray:
         src = np.asarray(src, dtype=np.float32)

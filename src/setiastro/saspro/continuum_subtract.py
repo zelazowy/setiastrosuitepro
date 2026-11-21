@@ -1,5 +1,6 @@
 #saspro/continuum_subtract.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 from setiastro.saspro.main_helpers import non_blocking_sleep
 import os
 import numpy as np
@@ -257,6 +258,20 @@ class QPreviewDialog(QDialog):
         btn_cancel.clicked.connect(self.reject)
         btn_row.addWidget(btn_cancel)
         outer.addLayout(btn_row)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self._view.viewport(),
+            buttons={
+                'out': btn_zoom_out,
+                'in': btn_zoom_in,
+                'actual': btn_zoom_1to1,
+                'fit': btn_zoom_fit,
+            },
+            actual=self._view.reset_zoom,
+            scale=lambda: abs(self._view.transform().m11()),
+            ctrl_wheel=True,
+        )
 
     # ── slots ─────────────────────────────────────────────────────────────────
 
@@ -2433,6 +2448,19 @@ class ContinuumSubtractTab(QWidget):
         except Exception:
             pass
 
+        dlg.zoom_bar = PreviewZoomBar.replace(
+            dlg,
+            view.viewport(),
+            buttons={
+                'out': btn_zoom_out,
+                'in': btn_zoom_in,
+                'actual': btn_zoom_1to1,
+                'fit': btn_zoom_fit,
+            },
+            actual=view.reset_zoom,
+            scale=lambda: abs(view.transform().m11()),
+            ctrl_wheel=True,
+        )
         dlg.exec()
 
 

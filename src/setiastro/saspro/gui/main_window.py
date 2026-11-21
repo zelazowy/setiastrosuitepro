@@ -791,6 +791,8 @@ class AstroSuiteProMainWindow(
 
         # Listen only on the app object
         app.installEventFilter(self)
+        from setiastro.saspro.widgets.tool_escape import ToolEscapeFilter
+        self._tool_escape_filter = ToolEscapeFilter(self)
 
         self.apply_theme_from_settings()
         self._populate_view_panels_menu()

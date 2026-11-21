@@ -5,6 +5,7 @@
 #  All rights reserved.
 # ============================================================
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 from typing import Optional
 import json
 import numpy as np
@@ -162,7 +163,7 @@ class _PreviewCanvas(QWidget):
 
     def paintEvent(self, event):
         p = QPainter(self)
-        p.fillRect(self.rect(), QColor(25, 25, 28))
+        p.fillRect(self.rect(), self.palette().window())
 
         src = self._before or self._after
         if src is None:
@@ -174,6 +175,9 @@ class _PreviewCanvas(QWidget):
 
         r = self._img_rect()
 
+        if self.property('sasShowBefore') and self._before is not None:
+            p.drawPixmap(r, self._before, QRectF(self._before.rect()))
+            return
         if not self._split_mode or self._before is None or self._after is None:
             # Single-view: show after (or before if after missing)
             pm = self._after if self._after is not None else self._before
@@ -261,16 +265,18 @@ class _PreviewCanvas(QWidget):
         if dy == 0:
             return
         factor = 1.15 if dy > 0 else 1.0 / 1.15
+        self._zoom_around(factor, ev.position().toPoint())
+        ev.accept()
+
+    def _zoom_around(self, factor, pos):
         old_zoom = self._zoom
-        self._zoom = max(0.05, min(32.0, self._zoom * factor))
+        self._zoom = max(1e-6, min(32.0, self._zoom * factor))
         self._fit_mode = False
-        pos = ev.position().toPoint()
         self._offset = QPoint(
             int(pos.x() - (pos.x() - self._offset.x()) * self._zoom / old_zoom),
             int(pos.y() - (pos.y() - self._offset.y()) * self._zoom / old_zoom),
         )
         self.update()
-        ev.accept()
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
@@ -348,6 +354,27 @@ class LayersPreviewWindow(QDialog):
         # Fix btn_fit now canvas exists
         self.btn_fit.clicked.disconnect()
         self.btn_fit.clicked.connect(self.canvas.reset_view)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.canvas,
+            buttons={'fit': self.btn_fit},
+            zoom_in=lambda: self.canvas._zoom_around(
+                1.25,
+                self.canvas.rect().center(),
+            ),
+            zoom_out=lambda: self.canvas._zoom_around(
+                0.8,
+                self.canvas.rect().center(),
+            ),
+            actual=lambda: self._actual_preview_size(),
+            scale=lambda: self.canvas._zoom,
+        )
+        self.zoom_bar.enable_canvas_comparison(self.canvas)
+
+    def _actual_preview_size(self):
+        self.canvas._zoom_around(1.0 / max(self.canvas._zoom, 1e-9),
+                                 self.canvas.rect().center())
 
     def _on_split_toggled(self, on: bool):
         self.canvas.set_split_mode(on)

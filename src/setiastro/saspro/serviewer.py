@@ -1,6 +1,7 @@
 # src/setiastro/saspro/serviewer.py
 from __future__ import annotations
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import os
 import numpy as np
 
@@ -496,6 +497,20 @@ class SERViewer(QDialog):
         self.chk_planet_norm.toggled.connect(self._refresh)
         self.resize(1200, 800)
         self._on_track_mode_changed()
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'actual': self.btn_zoom_1_1,
+                'fit': self.btn_zoom_fit,
+            },
+            scale=lambda: (
+                self._fit_zoom_factor() if self._fit_mode else self._zoom
+            ),
+        )
 
 
     #-----qsettings

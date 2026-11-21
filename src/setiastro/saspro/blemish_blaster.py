@@ -1,5 +1,6 @@
 #saspro/blemish_blaster.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import math
 import numpy as np
 from typing import Optional
@@ -973,6 +974,18 @@ class BlemishBlasterDialogPro(QDialog):
 
         self.addAction(a_radius_down)
         self.addAction(a_radius_up)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_zoom_fit,
+            },
+            actual=lambda: self._set_zoom(1.0),
+            scale=lambda: abs(self.view.transform().m11()),
+        )
 
     # # === SASpro Blaster shortcut fix v1 ===
     def event(self, e):

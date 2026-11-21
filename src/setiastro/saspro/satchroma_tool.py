@@ -20,6 +20,7 @@
 # ============================================================
 from __future__ import annotations
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar, preview_ratio
 import math
 from typing import List, Optional, Tuple
 
@@ -256,7 +257,7 @@ class _SplitPreviewWidget(QWidget):
 
     def paintEvent(self, event):
         p = QPainter(self)
-        p.fillRect(self.rect(), QColor(25, 25, 28))
+        p.fillRect(self.rect(), self.palette().window())
 
         if self._before is None:
             p.setPen(QColor(100, 100, 110))
@@ -266,6 +267,9 @@ class _SplitPreviewWidget(QWidget):
             return
 
         r = self._img_rect()
+        if self.property('sasShowBefore'):
+            p.drawPixmap(r, self._before, QRectF(self._before.rect()))
+            return
         split_x = r.left() + self._split * r.width()
 
         # Before (left)
@@ -353,17 +357,21 @@ class _SplitPreviewWidget(QWidget):
         if dy == 0:
             return
         factor = 1.15 if dy > 0 else 1.0 / 1.15
+        self.zoom_by(factor, ev.position().toPoint())
+        ev.accept()
+
+    def zoom_by(self, factor, pos=None):
+        """Zoom around a viewport point, defaulting to its center."""
         old_zoom = self._zoom
-        self._zoom = max(0.05, min(32.0, self._zoom * factor))
+        self._zoom = max(1e-6, min(128.0, self._zoom * factor))
         self._fit_mode = False
-        # zoom toward cursor
-        pos = ev.position().toPoint()
+        if pos is None:
+            pos = self.rect().center()
         self._offset = QPoint(
             int(pos.x() - (pos.x() - self._offset.x()) * self._zoom / old_zoom),
             int(pos.y() - (pos.y() - self._offset.y()) * self._zoom / old_zoom),
         )
         self.update()
-        ev.accept()
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
@@ -873,6 +881,23 @@ class SatChromaTool(QDialog):
         splitter.setSizes([380, 340])
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
+
+        def ratio():
+            return preview_ratio(self._preview_src, self._source)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.preview,
+            buttons={'fit': btn_fit},
+            zoom_in=lambda: self.preview.zoom_by(1.25),
+            zoom_out=lambda: self.preview.zoom_by(0.8),
+            actual=lambda: self.preview.zoom_by(
+                1.0 / max(self.preview._zoom * ratio(), 1e-09),
+            ),
+            scale=lambda: self.preview._zoom * ratio(),
+            reduced=lambda: ratio() < 0.999,
+        )
+        self.zoom_bar.enable_canvas_comparison(self.preview)
     # ── change / debounce ─────────────────────────────────────
 
     def _on_changed(self):

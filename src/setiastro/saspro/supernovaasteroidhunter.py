@@ -50,6 +50,7 @@ threaded via MinorBodyWorker in the original, and that part still works.
 
 from __future__ import annotations
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import os
 import sys
 import platform
@@ -2271,6 +2272,18 @@ class ResultsDialog(QDialog):
         self.btn_close.clicked.connect(self.close)
         bb.addWidget(self.btn_close)
         lay.addLayout(bb)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_fit,
+                'actual': self.btn_1to1,
+            },
+            scale=lambda: abs(self.view.transform().m11()),
+        )
 
     # ---- Minor-body progress mirroring ---------------------------------
 

@@ -10,7 +10,8 @@ from PyQt6.QtCore import (
     pyqtSignal, pyqtSlot
 )
 from PyQt6.QtGui import (
-    QImage, QPixmap, QIcon, QCursor, QPen, QBrush, QColor, QPainterPath, QTransform, QPainter
+    QImage, QPixmap, QIcon, QCursor, QPen, QBrush, QColor, QPainter,
+    QPainterPath, QTransform
 )
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGroupBox, QGridLayout,
@@ -26,7 +27,7 @@ from PyQt6.QtWidgets import (
 # Import centralized widgets
 from setiastro.saspro.widgets.graphics_views import ZoomableGraphicsView
 from setiastro.saspro.widgets.image_utils import extract_mask_resized as _get_active_mask_resized
-from setiastro.saspro.widgets.themed_buttons import themed_toolbtn
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 from setiastro.saspro.help_support import make_help_button
 
 # Patch revision marker — used by the patcher for idempotency. Do not remove.
@@ -385,6 +386,7 @@ class CLAHEDialogPro(QDialog):
         self._pm_after = None
         self._pm_sbs = None
         self._before_key = None
+        self._pm_before_sbs = None
         self._refit_pending = False
 
         root = QVBoxLayout(self)
@@ -564,16 +566,8 @@ class CLAHEDialogPro(QDialog):
             b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             self.grp_mode.addButton(b, mid)
             bar.addWidget(b)
-        self.grp_mode.button(_MODE_SPLIT).setChecked(True)
+        self.grp_mode.button(_MODE_AFTER).setChecked(True)
         self.grp_mode.idClicked.connect(self._on_mode_changed)
-
-        self.btn_hold = QToolButton()
-        self.btn_hold.setText(self.tr("Hold to compare"))
-        self.btn_hold.setToolTip(self.tr("Press and hold (or hold Space) to peek at the original"))
-        self.btn_hold.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_hold.pressed.connect(lambda: self._set_hold(True))
-        self.btn_hold.released.connect(lambda: self._set_hold(False))
-        bar.addSpacing(12); bar.addWidget(self.btn_hold)
 
         self.lbl_split = QLabel(self.tr("Divider:"))
         self.s_split = QSlider(Qt.Orientation.Horizontal)
@@ -646,27 +640,15 @@ class CLAHEDialogPro(QDialog):
         z = QHBoxLayout()
         self.lbl_status = QLabel("")
         self.lbl_status.setEnabled(False)
+        self.zoom_bar = PreviewZoomBar(
+            self, self.view.viewport(), zoom_in=self.view.zoom_in,
+            zoom_out=self.view.zoom_out, actual=self._zoom_actual,
+            fit=lambda: self.view.fit_to_item(self.pix),
+            scale=self._view_scale, ctrl_wheel=True,
+        )
+        self.zoom_bar.enable_comparison(self._set_hold)
+        z.addWidget(self.zoom_bar, 1)
         z.addWidget(self.lbl_status)
-        z.addStretch(1)
-        self.lbl_zoom = QLabel("")
-        z.addWidget(self.lbl_zoom)
-
-        self.btn_zoom_in  = themed_toolbtn("zoom-in", "Zoom In")
-        self.btn_zoom_out = themed_toolbtn("zoom-out", "Zoom Out")
-        self.btn_zoom_fit = themed_toolbtn("zoom-fit-best", "Fit to Preview")
-        self.btn_zoom_1x  = QToolButton(); self.btn_zoom_1x.setText("1:1")
-        self.btn_zoom_1x.setToolTip(self.tr("One image pixel per screen pixel"))
-        for b in (self.btn_zoom_in, self.btn_zoom_out, self.btn_zoom_fit, self.btn_zoom_1x):
-            try: b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            except Exception: pass
-
-        self.btn_zoom_in.clicked.connect(self.view.zoom_in)
-        self.btn_zoom_out.clicked.connect(self.view.zoom_out)
-        self.btn_zoom_fit.clicked.connect(lambda: self.view.fit_to_item(self.pix))
-        self.btn_zoom_1x.clicked.connect(self._zoom_actual)
-
-        z.addWidget(self.btn_zoom_in); z.addWidget(self.btn_zoom_out)
-        z.addWidget(self.btn_zoom_fit); z.addWidget(self.btn_zoom_1x)
         v.addLayout(z)
 
         self._sync_split_visibility()
@@ -718,7 +700,8 @@ class CLAHEDialogPro(QDialog):
             self.chk_stretch.blockSignals(True)
             self.chk_stretch.setChecked(s.value(f"{self._SKEY}/autostretch", False, type=bool))
             self.chk_stretch.blockSignals(False)
-            btn = self.grp_mode.button(int(s.value(f"{self._SKEY}/mode", _MODE_SPLIT)))
+            mode = int(s.value(f"{self._SKEY}/mode", _MODE_AFTER))
+            btn = self.grp_mode.button(mode)
             if btn is not None:
                 btn.setChecked(True)
             self._split_frac = max(0.0, min(1.0, float(s.value(f"{self._SKEY}/split", 0.5))))
@@ -780,6 +763,7 @@ class CLAHEDialogPro(QDialog):
         self._pm_before = None
         self._pm_after = None
         self._pm_sbs = None
+        self._pm_before_sbs = None
         self.doc = None
         try:
             self.pix.setPixmap(QPixmap())
@@ -881,7 +865,8 @@ class CLAHEDialogPro(QDialog):
         self._mask_ready = False
         self._stf = None
         self._last_sig = None
-        self._pm_before = self._pm_after = self._pm_sbs = None
+        self._pm_before = self._pm_after = None
+        self._pm_sbs = self._pm_before_sbs = None
         self._before_key = None
         self._refit_pending = False
 
@@ -935,9 +920,10 @@ class CLAHEDialogPro(QDialog):
 
     # ---------------- composition ----------------
     def _mode(self) -> int:
-        if self._hold_before:
+        mode = int(self.grp_mode.checkedId())
+        if self._hold_before and mode != _MODE_SBS:
             return _MODE_BEFORE
-        return int(self.grp_mode.checkedId())
+        return mode
 
     def _view_scale(self) -> float:
         try:
@@ -964,7 +950,8 @@ class CLAHEDialogPro(QDialog):
         with the stretch currently selected.
         """
         if self._preview is None:
-            self._pm_before = self._pm_after = self._pm_sbs = None
+            self._pm_before = self._pm_after = None
+            self._pm_sbs = self._pm_before_sbs = None
             return
         if self._preview.shape[:2] != self._disp_base.shape[:2]:
             return
@@ -984,6 +971,7 @@ class CLAHEDialogPro(QDialog):
                 after = stf_apply(after, *stf)
             self._pm_after = self._pixmap_from(after)
         self._pm_sbs = None
+        self._pm_before_sbs = None
         self._pix_after.setPixmap(self._pm_after)
 
     def _set_pix(self, rgb):
@@ -1014,7 +1002,19 @@ class CLAHEDialogPro(QDialog):
             return
         mode = self._mode()
         split = (mode == _MODE_SPLIT)
-        if mode == _MODE_SBS:
+        if mode == _MODE_SBS and self._hold_before:
+            if self._pm_before_sbs is None:
+                width = self._pm_before.width()
+                height = self._pm_before.height()
+                original_pair = QPixmap(width * 2 + 4, height)
+                original_pair.fill(Qt.GlobalColor.black)
+                painter = QPainter(original_pair)
+                painter.drawPixmap(0, 0, self._pm_before)
+                painter.drawPixmap(width + 4, 0, self._pm_before)
+                painter.end()
+                self._pm_before_sbs = original_pair
+            self.pix.setPixmap(self._pm_before_sbs)
+        elif mode == _MODE_SBS:
             if self._pm_sbs is None and self._preview is not None:
                 # Paint the two converted sides 1:1 with a 4 px black gap: the
                 # same pixels as stretching and converting a concatenated
@@ -1089,7 +1089,7 @@ class CLAHEDialogPro(QDialog):
 
     def _refresh_zoom_label(self):
         try:
-            self.lbl_zoom.setText(f"{self._view_scale() * 100.0:.0f}%")
+            self.zoom_bar.refresh()
             want = (Qt.TransformationMode.SmoothTransformation if self._view_scale() < 0.999
                     else Qt.TransformationMode.FastTransformation)
             if self.pix.transformationMode() != want:
@@ -1102,7 +1102,9 @@ class CLAHEDialogPro(QDialog):
         # The scene is in image coordinates, so identity == one image pixel per
         # screen pixel whatever the preview is currently rendered at.
         try:
-            self.view.resetTransform()
+            center = self.view.mapToScene(self.view.viewport().rect().center())
+            self.view.reset_zoom()
+            self.view.centerOn(center)
             self._refresh_zoom_label()
         except Exception:
             pass
@@ -1140,16 +1142,6 @@ class CLAHEDialogPro(QDialog):
             return
         self._hold_before = on
         self._compose_and_show()
-
-    def keyPressEvent(self, ev):
-        if ev.key() == Qt.Key.Key_Space and not ev.isAutoRepeat():
-            self._set_hold(True); ev.accept(); return
-        super().keyPressEvent(ev)
-
-    def keyReleaseEvent(self, ev):
-        if ev.key() == Qt.Key.Key_Space and not ev.isAutoRepeat():
-            self._set_hold(False); ev.accept(); return
-        super().keyReleaseEvent(ev)
 
     def eventFilter(self, obj, ev):
         """Drag the split divider directly in the preview.

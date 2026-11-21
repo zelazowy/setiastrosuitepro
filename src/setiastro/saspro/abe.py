@@ -16,6 +16,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
+
 # ---------------------------------------------------------------------------
 # DEBUG: when True, an ADBE run with Multiscale Gradient Refinement enabled
 # also pushes the raw median+k*MAD signal-protection mask to a new document,
@@ -46,7 +48,6 @@ from .doc_manager import ImageDocument
 from setiastro.saspro.legacy.numba_utils import build_poly_terms, evaluate_polynomial
 from .autostretch import autostretch as hard_autostretch
 from setiastro.saspro.color_space_manager import tag_qimage_with_working_color_space
-from setiastro.saspro.widgets.themed_buttons import themed_toolbtn
 from setiastro.saspro.abe_multiscale_gradient import multiscale_gradient_correct
 from setiastro.saspro.thread_keeper import start_owned_thread
 # =============================================================================
@@ -2614,8 +2615,8 @@ class ABEDialog(QDialog):
         right_container = QWidget()
         right = QVBoxLayout(right_container)
         right.setContentsMargins(0, 0, 0, 0)
-        right.addLayout(self._build_toolbar())      # Zoom In / Out / Fit / Autostretch
-        right.addWidget(self.preview_scroll, 1)     # Preview below the buttons
+        right.addWidget(self.preview_scroll, 1)
+        right.addLayout(self._build_toolbar())
 
         # Wrap the controls column in a scroll area so that even fully expanded
         # it can never exceed the window height on a small display — the user
@@ -2681,6 +2682,7 @@ class ABEDialog(QDialog):
         self.preview_scroll.viewport().installEventFilter(self)
         self.preview_label.installEventFilter(self)
         self._install_zoom_filters()
+        self.preview_scroll.viewport().installEventFilter(self.zoom_bar)
         self._populate_initial_preview()
         self.sp_degree.valueChanged.connect(self._degree_changed) 
         self.sp_degree.valueChanged.connect(self._save_settings)
@@ -3238,9 +3240,17 @@ class ABEDialog(QDialog):
         bar.setContentsMargins(0, 0, 0, 0)
         bar.setSpacing(6)
 
-        self.btn_zoom_in  = themed_toolbtn("zoom-in", "Zoom In")
-        self.btn_zoom_out = themed_toolbtn("zoom-out", "Zoom Out")
-        self.btn_fit      = themed_toolbtn("zoom-fit-best", "Fit to Preview")
+        self.zoom_bar = PreviewZoomBar(
+            self, self.preview_scroll.viewport(), zoom_in=self.zoom_in,
+            zoom_out=self.zoom_out, actual=self._zoom_actual,
+            fit=self.fit_to_preview, scale=lambda: self._preview_scale,
+        )
+        self.preview_comparison = self.zoom_bar.enable_image_comparison(
+            self._comparison_before_image, self._redraw_comparison,
+            source_key=lambda: (id(getattr(self.doc, 'image', None)),
+                                self._autostretch_on),
+        )
+        bar.addWidget(self.zoom_bar, 1)
 
         # Use a plain QToolButton so it is always visible even if the theme icon is missing.
         self.btn_autostr = QToolButton(self)
@@ -3251,17 +3261,9 @@ class ABEDialog(QDialog):
         self.btn_autostr.setMinimumHeight(24)
         self.btn_autostr.setMinimumWidth(44)
 
-        self.btn_zoom_in.clicked.connect(self.zoom_in)
-        self.btn_zoom_out.clicked.connect(self.zoom_out)
-        self.btn_fit.clicked.connect(self.fit_to_preview)
         self.btn_autostr.clicked.connect(self.autostretch_preview)
 
-        # Keep all toolbar buttons together on the left
-        bar.addWidget(self.btn_zoom_in)
-        bar.addWidget(self.btn_zoom_out)
-        bar.addWidget(self.btn_fit)
         bar.addWidget(self.btn_autostr)
-        bar.addStretch(1)
 
         return bar
 
@@ -4450,7 +4452,21 @@ class ABEDialog(QDialog):
         buf, qimg = _render_display_u8(a, bool(getattr(self, "_autostretch_on", False)))
         self._install_display(buf, qimg)
 
+    def _comparison_before_image(self):
+        from setiastro.saspro.widgets.image_utils import numpy_to_qimage
+        if getattr(self.doc, 'image', None) is None:
+            return QImage()
+        source = self._get_source_float()
+        if self._autostretch_on:
+            source = hard_autostretch(
+                source, target_median=0.5, sigma=2,
+                linked=False, use_24bit=True,
+            )
+        return numpy_to_qimage(source)
 
+    def _redraw_comparison(self):
+        self._update_preview_scaled()
+        self._redraw_overlay()
 
     def _update_preview_scaled(self, *, _prescaled=None):
         try:
@@ -4466,13 +4482,15 @@ class ABEDialog(QDialog):
         sw = max(1, int(self._preview_qimg.width()  * self._preview_scale))
         sh = max(1, int(self._preview_qimg.height() * self._preview_scale))
 
-        if _prescaled is not None and _prescaled[0] == (sw, sh):
-            scaled = _prescaled[1]      # same scaled() call, done on the worker
+        image = self.preview_comparison.image(self._preview_qimg)
+        if (not self.preview_comparison.hold.showing_before
+                and _prescaled is not None and _prescaled[0] == (sw, sh)):
+            scaled = _prescaled[1]  # Reuse the worker's scaled result.
         else:
-            scaled = self._preview_qimg.scaled(
+            scaled = image.scaled(
                 sw, sh,
                 Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
+                Qt.TransformationMode.SmoothTransformation,
             )
 
         if scaled.isNull():
@@ -4769,7 +4787,7 @@ class ABEDialog(QDialog):
         (a QPoint in viewport coordinates) stationary.
         """
         old_scale = float(self._preview_scale)
-        new_scale = max(0.05, min(old_scale * factor, 8.0))
+        new_scale = max(1e-6, min(old_scale * factor, max(8.0, old_scale)))
         if abs(new_scale - old_scale) < 1e-6:
             return
         factor = new_scale / old_scale
@@ -4802,6 +4820,11 @@ class ABEDialog(QDialog):
         vp = self.preview_scroll.viewport()
         self._zoom_at(0.8, vp.rect().center())
 
+    def _zoom_actual(self):
+        if self._preview_qimg is not None:
+            self._zoom_at(1.0 / self._preview_scale,
+                          self.preview_scroll.viewport().rect().center())
+
     def fit_to_preview(self, *, _prescaled=None) -> None:
         """Set scale so the image fits inside the viewport (keeps aspect)."""
         if self._preview_qimg is None:
@@ -4812,7 +4835,7 @@ class ABEDialog(QDialog):
         if iw == 0 or ih == 0:
             return
         scale = min(vw / iw, vh / ih)
-        self._preview_scale = max(0.05, min(scale, 8.0))
+        self._preview_scale = max(1e-6, scale)
         self._update_preview_scaled(_prescaled=_prescaled)
         self._redraw_overlay()
 

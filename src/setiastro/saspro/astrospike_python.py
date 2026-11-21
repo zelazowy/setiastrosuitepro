@@ -1,3 +1,4 @@
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import numpy as np
 import math
 from dataclasses import dataclass, field
@@ -1330,6 +1331,22 @@ class AstroSpikeWindow(QDialog):
             QScrollBar::handle:vertical { background: #424242; min-height: 20px; border-radius: 5px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
         """)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.canvas,
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_fit,
+            },
+            actual=lambda: (
+                setattr(self.canvas, 'scale', 1.0),
+                self.canvas.center_image(),
+            ),
+            scale=lambda: self.canvas.scale,
+        )
+        self.zoom_bar.enable_canvas_comparison(self.canvas)
         
     def detect_stars(self):
         if self.image_data is None:
@@ -1761,7 +1778,7 @@ class CanvasPreview(QWidget):
     def paintEvent(self, event: QPaintEvent):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.fillRect(self.rect(), QColor(10, 10, 12))
+        painter.fillRect(self.rect(), self.palette().window())
         
         if not self.image:
             painter.setPen(QColor(100, 100, 100))
@@ -1774,6 +1791,8 @@ class CanvasPreview(QWidget):
         
         target_rect = QRectF(0, 0, self.image.width(), self.image.height())
         painter.drawImage(target_rect, self.image)
+        if self.property('sasShowBefore'):
+            return
         
         if self.config:
             self.renderer.render(painter, self.image.width(), self.image.height(), self.stars, self.config)

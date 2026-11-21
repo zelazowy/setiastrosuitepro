@@ -1,5 +1,6 @@
 # saspro/mask_creation.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import uuid
 import numpy as np
 import math
@@ -388,6 +389,14 @@ class LivePreviewDialog(QDialog):
         lay.setSpacing(2)
         lay.addLayout(tb)
         lay.addWidget(self._view, 1)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self._view.viewport(),
+            buttons={'out': b_out, 'in': b_in, 'fit': b_fit},
+            actual=lambda: self._view.set_zoom(1.0),
+            scale=lambda: self._view._zoom,
+        )
 
     # ── public API ────────────────────────────────────────────────────────────
 
@@ -891,6 +900,14 @@ class MaskPreviewDialog(QDialog):
 
         self.setMinimumSize(640, 480)
 
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self._view.viewport(),
+            buttons={'out': b_out, 'in': b_in, 'fit': b_fit},
+            actual=lambda: self._view.set_zoom(1.0),
+            scale=lambda: self._view._zoom,
+        )
+
     def _make_pixmap(self, mask01: np.ndarray) -> QPixmap:
         m8 = (np.clip(mask01, 0, 1) * 255).astype(np.uint8)
         h, w = m8.shape
@@ -1337,6 +1354,14 @@ class MaskCreationDialog(QDialog):
         self.canvas.installEventFilter(self)
 
         self.resize(980, 640)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.canvas.viewport(),
+            buttons={'out': z_out, 'in': z_in, 'fit': z_fit},
+            actual=lambda: self.canvas.set_zoom(1.0),
+            scale=lambda: abs(self.canvas.transform().m11()),
+        )
 
     def _on_mask_type_changed(self, mask_type: str):
         is_star = (mask_type == "Star Mask")  # match your exact string

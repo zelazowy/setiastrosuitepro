@@ -1,6 +1,7 @@
 #saspro/crop_dialog_pro.py
 from __future__ import annotations
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import math
 import os
 import sys
@@ -1586,6 +1587,18 @@ class CropDialogPro(QDialog):
         self.resize(1100, 720)
         self._deferred_fit()
 
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_zoom_fit,
+                'actual': self.btn_zoom_100,
+            },
+            scale=lambda: abs(self.view.transform().m11()),
+        )
+
     # =========================================================================
     # Overlap panel integration
     # =========================================================================
@@ -2062,6 +2075,7 @@ class CropDialogPro(QDialog):
         self._apply_zoom_transform()
 
     def _zoom_by(self, factor: float):
+        self._zoom = abs(self.view.transform().m11())
         self._fit_mode = False
         newz = min(16.0, max(0.05, self._zoom * float(factor)))
         if abs(newz - self._zoom) < 1e-4: return

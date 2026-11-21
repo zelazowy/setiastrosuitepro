@@ -1,5 +1,6 @@
 #saspro/signature_insert.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import math
 import numpy as np
 
@@ -510,7 +511,7 @@ class InsertView(QGraphicsView):
         r = self.scene().itemsBoundingRect()
         if r.isEmpty(): return
         self.fitInView(r, Qt.AspectRatioMode.KeepAspectRatio)
-        self.zoom_factor = 1.0  # logical reset
+        self.zoom_factor = abs(self.transform().m11())
 
     def contextMenuEvent(self, e):
         scene_pos = self.mapToScene(e.pos())
@@ -1118,6 +1119,17 @@ class SignatureInsertDialogPro(QDialog):
 
         # Callout drag capture
         self.view.viewport().installEventFilter(self)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={'out': b_zo, 'in': b_zi, 'fit': b_fit},
+            actual=lambda: self.view.set_zoom(1.0),
+            scale=lambda: abs(self.view.transform().m11()),
+        )
+        self.zoom_bar.enable_overlay_comparison(
+            self.scene, lambda: self._comparison_base,
+        )
 
     def _begin_create_insert_from_current(self):
         mb = QMessageBox(self)
@@ -2274,6 +2286,7 @@ class SignatureInsertDialogPro(QDialog):
         bg = QGraphicsPixmapItem(QPixmap.fromImage(qimg))
         bg.setZValue(0)
         self.scene.addItem(bg)
+        self._comparison_base = bg
 
         self._tech_init_catalog()
         if self.cb_tech.isChecked():

@@ -1,5 +1,6 @@
 #saspro/star_stretch.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar, preview_ratio
 import os
 import numpy as np
 
@@ -336,6 +337,25 @@ class StarStretchDialog(QDialog):
         if self.chk_auto.isChecked():
             self._auto_timer.start()
 
+        def ratio():
+            return preview_ratio(
+                getattr(self, '_pix', None),
+                getattr(self.doc, 'image', None),
+            )
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll.viewport(),
+            buttons={'out': b_out, 'in': b_in, 'fit': b_fit},
+            actual=lambda: self._set_zoom(1.0 / ratio()),
+            scale=lambda: self._zoom * ratio(),
+            reduced=lambda: ratio() < 0.999,
+        )
+        self.preview_comparison = self.zoom_bar.enable_image_comparison(
+            self._comparison_before_image, self._apply_zoom,
+            source_key=lambda: id(self.doc.image),
+        )
+
     # --- active document change ---
     def _on_active_doc_changed(self, doc):
         """Called when user clicks a different image window."""
@@ -655,10 +675,15 @@ class StarStretchDialog(QDialog):
         self._pix = pm
         self._apply_zoom()
 
+    def _comparison_before_image(self):
+        return _as_qimage_rgb8(_to_float01(self.doc.image))
+
     def _apply_zoom(self):
         if self._pix is None:
             return
-        scaled = self._pix.scaled(self._pix.size()*self._zoom,
+        image = (self.preview_comparison.image(self._pix)
+                 if hasattr(self, 'preview_comparison') else self._pix)
+        scaled = image.scaled(self._pix.size()*self._zoom,
                                   Qt.AspectRatioMode.KeepAspectRatio,
                                   Qt.TransformationMode.SmoothTransformation)
         self.label.setPixmap(scaled)
@@ -672,10 +697,14 @@ class StarStretchDialog(QDialog):
         vp = self.scroll.viewport().size()
         if self._pix.width()==0 or self._pix.height()==0: return
         s = min(vp.width()/self._pix.width(), vp.height()/self._pix.height())
-        self._set_zoom(max(0.05, s))
+        self._set_zoom(max(1e-6, s))
 
     def _set_zoom(self, z: float):
-        self._zoom = float(max(0.05, min(z, 8.0)))
+        ratio = preview_ratio(
+            getattr(self, '_pix', None),
+            getattr(self.doc, 'image', None),
+        )
+        self._zoom = float(max(1e-6, min(z, 8.0 / ratio)))
         self._apply_zoom()
 
     # --- spinner ---

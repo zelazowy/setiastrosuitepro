@@ -1,6 +1,7 @@
 #saspro/wavescale_hdr.py
 from __future__ import annotations
 import functools
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import numpy as np
 
 from PyQt6.QtCore import Qt, QObject, pyqtSignal, QThread, QTimer, QSettings
@@ -619,6 +620,25 @@ class WaveScaleHDRDialogPro(QDialog):
         # show initial mask (and the image) as soon as the job is done
         self._update_mask_from_gamma()
 
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_fit,
+            },
+            actual=self.view.reset_zoom,
+            scale=lambda: abs(self.view.transform().m11()),
+            ctrl_wheel=True,
+        )
+        from setiastro.saspro.widgets.image_utils import numpy_to_qimage
+        self.btn_toggle.hide()
+        self.preview_comparison = self.zoom_bar.enable_pixmap_comparison(
+            lambda: numpy_to_qimage(self.original_rgb), self.pix,
+            source_key=lambda: id(self.original_rgb),
+        )
+
     def apply_preset(self, p: dict):
         # sliders are integer; map floats to their scales
         ns = int(p.get("n_scales", 5))
@@ -784,10 +804,15 @@ class WaveScaleHDRDialogPro(QDialog):
         arr = (np.clip(rgb, 0, 1) * 255).astype(np.uint8)
         h, w, _ = arr.shape
         q = QImage(arr.data, w, h, 3*w, QImage.Format.Format_RGB888)
-        self.pix.setPixmap(QPixmap.fromImage(q))
+        pixmap = QPixmap.fromImage(q)
+        if hasattr(self, 'preview_comparison'):
+            pixmap = self.preview_comparison.image(pixmap)
+        self.pix.setPixmap(pixmap)
         self.view.setSceneRect(self.pix.boundingRect())
 
     def _show_pixmap(self, pm: QPixmap):
+        if hasattr(self, 'preview_comparison'):
+            pm = self.preview_comparison.image(pm)
         self.pix.setPixmap(pm)
         self.view.setSceneRect(self.pix.boundingRect())
 

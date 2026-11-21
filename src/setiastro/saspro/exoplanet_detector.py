@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 from setiastro.saspro.main_helpers import non_blocking_sleep
 
 import os
@@ -1005,6 +1006,18 @@ class ReferenceOverlayDialog(QDialog):
         lay.addWidget(self.view)
         lay.addLayout(btns)
         self.resize(800, 600)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={
+                'out': self.zoom_out_btn,
+                'in': self.zoom_in_btn,
+                'actual': self.reset_btn,
+                'fit': self.fit_btn,
+            },
+            scale=lambda: abs(self.view.transform().m11()),
+        )
 
     def _update_stretch_button_text(self):
         self.stretch_btn.setText(f"Stretch: {'ON' if self.autostretch else 'OFF'}")

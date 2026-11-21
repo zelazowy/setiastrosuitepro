@@ -1,5 +1,6 @@
 #saspro/image_combine.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import numpy as np
 
 from PyQt6.QtCore import Qt, QPoint, QRect, QEvent, QTimer, QSettings, QByteArray, QThread, pyqtSignal
@@ -375,6 +376,14 @@ class ImageCombineDialog(QDialog):
         self.slOverlay.sliderReleased.connect(_save)
         self._populate_docs()
         self._update_preview()
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll.viewport(),
+            buttons={'out': btnOut, 'in': btnIn, 'fit': btnFit},
+            actual=lambda: (setattr(self, 'zoom', 1.0), self._apply_zoom()),
+            scale=lambda: self.zoom,
+        )
 
     def _k(self, key: str) -> str:
         return f"{self._persist_prefix}/{key}"
