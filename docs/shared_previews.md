@@ -11,6 +11,14 @@ previews share one pane and one control bar. Graphics views nested in outer
 scroll areas retain their scrolling arrangement. Legacy button objects remain
 available to their owners, while common QToolButtons provide the visible UI.
 
+## Closing tools
+
+Unmodified Escape closes the focused tool using its normal close handler, so
+cleanup and close vetoes still run. It does not apply a pending preview.
+Open menus and popups consume Escape first; modal prompts keep their normal
+cancellation behavior. Escape does not close the main workspace, and key repeat
+does not close another window after the first one disappears.
+
 ## Before/after interaction
 
 Hold unmodified Space to show Before. A muted Hold Space to compare hint beside
