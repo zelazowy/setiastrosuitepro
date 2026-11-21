@@ -1,4 +1,5 @@
 import pytest
+from conftest import wait_for_preview_workers
 from PyQt6.QtGui import QKeySequence
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMainWindow
@@ -39,6 +40,7 @@ def test_tool_zoom_is_source_scaled_and_non_destructive(
     dialog.show()
     dialog.activateWindow()
     QTest.qWait(200)
+    wait_for_preview_workers()
     bar = dialog.zoom_bar
     assert bar.preview_pane is not None
 

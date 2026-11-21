@@ -3,6 +3,7 @@ import importlib
 
 import numpy as np
 import pytest
+from conftest import wait_for_preview_workers
 from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtTest import QTest
@@ -35,6 +36,7 @@ def test_worker_delivery_preserves_hold_and_restores_latest_result(
     dialog = getattr(module, class_name)(main, ImageDocument(source))
     dialog.show()
     QTest.qWait(300)
+    wait_for_preview_workers()
     bar = dialog.zoom_bar
     result = np.full_like(source, [.8, .1, .6])
     dialog._set_pix(result)

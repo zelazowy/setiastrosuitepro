@@ -3,6 +3,7 @@ import importlib
 
 import numpy as np
 import pytest
+from conftest import wait_for_preview_workers
 from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtTest import QTest
@@ -64,6 +65,7 @@ def test_hold_uses_real_original_and_restores_result_without_editing(
     dialog.activateWindow()
     dialog.setFocus()
     QTest.qWait(300)
+    wait_for_preview_workers()
     bar = dialog.zoom_bar
     result = np.empty_like(source)
     result[:] = [.8, .05, .75]

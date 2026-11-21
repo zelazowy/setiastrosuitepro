@@ -3,6 +3,7 @@ import importlib
 
 import numpy as np
 import pytest
+from conftest import wait_for_preview_workers
 from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtGui import QKeySequence
 from PyQt6.QtTest import QTest
@@ -50,6 +51,7 @@ def test_migrated_image_tools(
     dialog = getattr(module, class_name)(main, doc)
     dialog.show()
     QTest.qWait(200)
+    wait_for_preview_workers()
     bar = dialog.zoom_bar
     assert bar.preview_pane is not None
 
