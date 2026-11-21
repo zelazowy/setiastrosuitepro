@@ -1,6 +1,6 @@
 {
   "purpose": "Combined local testing; do not submit this branch as an upstream PR",
-  "upstream_base": "a878fbeff06a2ed8a7c1708c86c4fbef038dc795",
+  "upstream_base": "e7186595ac0367272c9479364ef18c98f99f4039",
   "features": [
     {
       "name": "Ranked command search and native macOS Help search",
@@ -8,14 +8,9 @@
       "commit": "a878fbeff06a2ed8a7c1708c86c4fbef038dc795"
     },
     {
-      "name": "Shared preview zoom controls and shortcuts",
-      "provided_by": "feat/preview-zoom-controls",
-      "commit": "d6d790e"
-    },
-    {
-      "name": "Unified preview layout, background and hold-Space comparison",
-      "provided_by": "feat/unified-previews",
-      "commit": "ade1d39"
+      "name": "Unified tool previews: zoom, layout, background, hold-Space comparison and Escape",
+      "provided_by": "feat/unified-tool-previews",
+      "commit": "94afdd80870d11d22769c826c34bb0dbfce1484c"
     }
   ],
   "qa": "Fork-only tests and CI are retained on this integration branch",
