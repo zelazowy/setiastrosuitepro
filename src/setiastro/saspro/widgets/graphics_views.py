@@ -66,12 +66,16 @@ class ZoomableGraphicsView(QGraphicsView):
     
     def _apply_zoom(self, up: bool, anchor: QGraphicsView.ViewportAnchor | None = None):
         """Apply zoom in/out with optional anchor point."""
+        self._zoom = abs(self.transform().m11())
         old_anchor = self.transformationAnchor()
         if anchor is not None:
             self.setTransformationAnchor(anchor)
         
         step = self._zoom_step if up else (1.0 / self._zoom_step)
-        new_zoom = max(self._zoom_min, min(self._zoom_max, self._zoom * step))
+        # A fit can be below the manual floor; do not jump on the next step.
+        lower = min(self._zoom_min, self._zoom / self._zoom_step)
+        upper = max(self._zoom_max, self._zoom)
+        new_zoom = max(lower, min(upper, self._zoom * step))
         factor = new_zoom / self._zoom
         
         if factor != 1.0:
@@ -99,6 +103,7 @@ class ZoomableGraphicsView(QGraphicsView):
         self._zoom = 1.0
         self.resetTransform()
         self.fitInView(item, Qt.AspectRatioMode.KeepAspectRatio)
+        self._zoom = abs(self.transform().m11())
     
     # Alias for compatibility
     fit_item = fit_to_item
@@ -106,11 +111,12 @@ class ZoomableGraphicsView(QGraphicsView):
     @property
     def zoom_level(self) -> float:
         """Get current zoom level."""
-        return self._zoom
+        return abs(self.transform().m11())
     
     def set_zoom(self, level: float):
         """Set zoom to a specific level."""
         level = max(self._zoom_min, min(self._zoom_max, level))
+        self._zoom = abs(self.transform().m11())
         factor = level / self._zoom
         if factor != 1.0:
             self.scale(factor, factor)

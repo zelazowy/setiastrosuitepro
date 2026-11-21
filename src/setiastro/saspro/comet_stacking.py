@@ -1,5 +1,6 @@
 #saspro/comet_stacking.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import os
 import sys
 import tempfile
@@ -1423,6 +1424,18 @@ class CometCentroidPreview(QDialog):
             self._place_cross()
 
         self.view.viewport().installEventFilter(self)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_zoom_fit,
+                'actual': self.btn_zoom_100,
+            },
+            scale=lambda: abs(self.view.transform().m11()),
+        )
 
     def eventFilter(self, obj, ev):
         if obj is self.view.viewport():

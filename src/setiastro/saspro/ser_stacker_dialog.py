@@ -1,5 +1,6 @@
 # src/setiastro/saspro/ser_stacker_dialog.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import os
 import traceback
 import numpy as np
@@ -445,6 +446,18 @@ class APEditorDialog(QDialog):
 
         self._render()
 
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self._scroll.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_fit,
+                'actual': self.btn_100,
+            },
+            scale=lambda: self._zoom,
+        )
+
     def ap_size(self) -> int:
         return int(self._ap_size)
 
@@ -516,7 +529,7 @@ class APEditorDialog(QDialog):
 
     def _set_zoom(self, z: float):
         z = float(z)
-        z = max(0.10, min(4.00, z))
+        z = max(1e-6, min(4.00, z))
         self._zoom = z
 
         block = self.sld_zoom.blockSignals(True)
@@ -2425,6 +2438,18 @@ class BlinkKeepersDialog(QDialog):
 
         self._show_index(0)
 
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self._scroll.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_fit,
+                'actual': self.btn_100,
+            },
+            scale=lambda: self._zoom,
+        )
+
     def _set_zoom(self, z: float):
         # Remember where the viewport center is, as a fraction of the content,
         # so the same feature stays centered across the zoom change.
@@ -2440,7 +2465,7 @@ class BlinkKeepersDialog(QDialog):
             self._pending_anchor = None
 
         self._fit_mode = False
-        self._zoom = max(0.10, min(8.00, float(z)))
+        self._zoom = max(1e-6, min(8.00, float(z)))
 
         block = self.sld_zoom.blockSignals(True)
         try:
@@ -2668,6 +2693,7 @@ class BlinkKeepersDialog(QDialog):
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )
+            self._zoom = pm2.width() / max(1, pm.width())
         else:
             zw = max(1, int(round(pm.width() * self._zoom)))
             zh = max(1, int(round(pm.height() * self._zoom)))

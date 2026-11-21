@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License along with
 # this program. If not, see <https://www.gnu.org/licenses/>.
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar, preview_ratio
 from PyQt6.QtCore import (Qt, QEvent, QPointF, QTimer, QSettings, QByteArray,
                           QSize, pyqtSignal)
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -762,6 +763,28 @@ class GhsDialogPro(QDialog):
 
         QTimer.singleShot(0, self._fit)
 
+        def ratio():
+            return preview_ratio(
+                getattr(self, '_pix', None),
+                getattr(self.doc, 'image', None),
+            )
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll.viewport(),
+            buttons={'out': b_out, 'in': b_in, 'fit': b_fit},
+            actual=lambda: self._set_zoom(1.0 / ratio()),
+            scale=lambda: self._zoom * ratio(),
+            reduced=lambda: ratio() < 0.999,
+        )
+        self.btn_toggle_preview.hide()
+        self.preview_comparison = self.zoom_bar.enable_image_comparison(
+            lambda: _float_to_qimage_rgb8(
+                self._display_stretch_for_view(self._full_img)),
+            self._apply_zoom,
+            source_key=lambda: (id(self._full_img), self._display_autostretch),
+        )
+
     # -----------------------------------------------------------------------
     # Function-mode helpers
     # -----------------------------------------------------------------------
@@ -1379,7 +1402,9 @@ class GhsDialogPro(QDialog):
 
     def _apply_zoom(self):
         if self._pix is None: return
-        scaled = self._pix.scaled(
+        image = (self.preview_comparison.image(self._pix)
+                 if hasattr(self, 'preview_comparison') else self._pix)
+        scaled = image.scaled(
             self._pix.size() * self._zoom,
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation)
@@ -1387,7 +1412,11 @@ class GhsDialogPro(QDialog):
         self.label.resize(scaled.size())
 
     def _set_zoom(self, z):
-        self._zoom = float(max(0.05, min(z, 8.0)))
+        ratio = preview_ratio(
+            getattr(self, '_pix', None),
+            getattr(self.doc, 'image', None),
+        )
+        self._zoom = float(max(1e-6, min(z, 8.0 / ratio)))
         self._apply_zoom()
 
     def _fit(self):
@@ -1395,7 +1424,7 @@ class GhsDialogPro(QDialog):
         vp = self.scroll.viewport().size()
         if self._pix.width() == 0 or self._pix.height() == 0: return
         s = min(vp.width() / self._pix.width(), vp.height() / self._pix.height())
-        self._set_zoom(max(0.05, s))
+        self._set_zoom(max(1e-6, s))
 
     def _k_from_label_point(self, lbl_pt):
         if self._preview_img is None or self.label.pixmap() is None:

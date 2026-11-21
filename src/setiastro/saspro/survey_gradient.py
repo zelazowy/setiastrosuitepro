@@ -60,6 +60,7 @@
 # fetch fast and keeps the fit well conditioned.
 # -----------------------------------------------------------------------------
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 
 import functools
 import inspect
@@ -4461,12 +4462,19 @@ class SurveyGradientDialog(QDialog):
 
         _bar = QHBoxLayout()
         _bar.setContentsMargins(2, 2, 2, 2)
-        _bar.addWidget(_tb("\u2212", "Zoom out", self.pane_target.zoom_out))
-        _bar.addWidget(_tb("+", "Zoom in", self.pane_target.zoom_in))
-        _bar.addWidget(_tb("1:1", "Zoom to the original image scale",
-                           self.pane_target.zoom_1_1))
-        _bar.addWidget(_tb("Fit", "Fit the whole frame",
-                           self.pane_target.zoom_fit))
+        self.zoom_bar = PreviewZoomBar(
+            self,
+            self.pane_target.viewport(),
+            zoom_in=self.pane_target.zoom_in,
+            zoom_out=self.pane_target.zoom_out,
+            actual=self.pane_target.zoom_1_1,
+            fit=self.pane_target.zoom_fit,
+            scale=lambda: (
+                self.pane_target.scale / self.pane_target._render_to_image()
+            ),
+            reduced=lambda: self.pane_target._render_to_image() > 1.001,
+        )
+        _bar.addWidget(self.zoom_bar)
         _bar.addSpacing(12)
         _bar.addWidget(self.cmb_stretch)
         _bar.addSpacing(12)

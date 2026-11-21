@@ -1,5 +1,6 @@
 #saspro/morphology.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import numpy as np
 import cv2
 
@@ -257,6 +258,20 @@ class MorphologyDialogPro(QDialog):
         # fitted to it when it lands (seed_from_preset starts it at once).
         self._timer.start(0)
 
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={'out': btn_out, 'in': btn_in, 'fit': btn_fit},
+            actual=self.view.reset_zoom,
+            scale=lambda: abs(self.view.transform().m11()),
+            ctrl_wheel=True,
+        )
+        from setiastro.saspro.widgets.image_utils import numpy_to_qimage
+        self.preview_comparison = self.zoom_bar.enable_pixmap_comparison(
+            lambda: numpy_to_qimage(self.orig), self.pix,
+            source_key=lambda: id(self.orig),
+        )
+
     def _debounce(self): self._timer.start(200)
 
     def _show_u8(self, u8: np.ndarray):
@@ -267,7 +282,10 @@ class MorphologyDialogPro(QDialog):
         arr = (np.clip(rgb, 0, 1) * 255).astype(np.uint8)
         h, w, _ = arr.shape
         q = QImage(arr.data, w, h, 3*w, QImage.Format.Format_RGB888)
-        self.pix.setPixmap(QPixmap.fromImage(q))
+        pixmap = QPixmap.fromImage(q)
+        if hasattr(self, 'preview_comparison'):
+            pixmap = self.preview_comparison.image(pixmap)
+        self.pix.setPixmap(pixmap)
         self.scene.setSceneRect(self.pix.boundingRect())
 
     def _params(self):
@@ -349,7 +367,8 @@ class MorphologyDialogPro(QDialog):
             return
         self._base_u8 = (res["orig"], res["base_u8"])
         self._pv_result = (res["orig"], res["key"], res["out_u8"])
-        self.pix.setPixmap(QPixmap.fromImage(res["qimg"]))
+        pixmap = self.preview_comparison.image(QPixmap.fromImage(res["qimg"]))
+        self.pix.setPixmap(pixmap)
         self.scene.setSceneRect(self.pix.boundingRect())
         if self._pv_fit:
             self._pv_fit = False

@@ -1,3 +1,4 @@
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import sys
 import urllib
 # Standard library imports
@@ -4596,6 +4597,18 @@ class WIMIDialog(QDialog):
         #self._legend_dock = QDockWidget("Object Type Legend", self)
         legend = LegendDialog(self)
         legend.setModal(False)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.main_preview.viewport(),
+            buttons={
+                'out': self.zoom_out_button,
+                'in': self.zoom_in_button,
+                'actual': self.zoom_100_button,
+                'fit': self.fit_preview_button,
+            },
+            scale=lambda: abs(self.main_preview.transform().m11()),
+        )
     
     ATLAS_CATALOG_URL = "https://f005.backblazeb2.com/file/setiastro-atlas/catalog.json"
 

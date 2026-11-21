@@ -24,6 +24,7 @@
 
 from __future__ import annotations
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import math
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List, Tuple
@@ -1617,6 +1618,18 @@ class MagnitudeRegionDialog(QDialog):
         self._load_image()
         QTimer.singleShot(0, self.fit_to_view)
 
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_zoom_fit,
+                'actual': self.btn_zoom_100,
+            },
+            scale=lambda: abs(self.view.transform().m11()),
+        )
+
     # ---------- doc helpers ----------
     def _begin_interactive_present(self):
         """
@@ -2395,19 +2408,16 @@ class FullImageAnnotatedDialog(QDialog):
         self._scene.setSceneRect(self._pix_item.boundingRect())
         lay.addWidget(self._view, 1)
 
-        # zoom buttons
-        zoom_row = QHBoxLayout()
-        for label, factor in [("Zoom In", 1.25), ("Zoom Out", 0.8), ("Fit", None), ("1:1", 0.0)]:
-            b = QPushButton(label)
-            if factor is None:
-                b.clicked.connect(self._fit)
-            elif factor == 0.0:
-                b.clicked.connect(self._zoom_100)
-            else:
-                b.clicked.connect(lambda _=False, f=factor: self._view.scale(f, f))
-            zoom_row.addWidget(b)
-        zoom_row.addStretch(1)
-        lay.addLayout(zoom_row)
+        self.zoom_bar = PreviewZoomBar(
+            self,
+            self._view.viewport(),
+            zoom_in=lambda: self._view.scale(1.25, 1.25),
+            zoom_out=lambda: self._view.scale(0.8, 0.8),
+            actual=self._zoom_100,
+            fit=self._fit,
+            scale=lambda: abs(self._view.transform().m11()),
+        )
+        lay.addWidget(self.zoom_bar)
 
         QTimer.singleShot(0, self._fit)
 

@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 from setiastro.saspro.imageops.stretch import stretch_color_image
 # Shared utilities
 from setiastro.saspro.widgets.image_utils import extract_mask_from_document as _active_mask_array_from_doc
-from setiastro.saspro.widgets.themed_buttons import themed_toolbtn
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 
 
 
@@ -391,20 +391,14 @@ class BackgroundNeutralizationDialog(QDialog):
         btn_row.addWidget(self.btn_find_bg)
         layout.addLayout(btn_row)
 
-        # Zoom row
-        # Zoom row (standardized themed toolbuttons)
-        zoom_row = QHBoxLayout()
-
-        self.btn_zoom_out = themed_toolbtn("zoom-out", "Zoom Out")
-        self.btn_fit      = themed_toolbtn("zoom-fit-best", "Fit to View")
-        self.btn_zoom_in  = themed_toolbtn("zoom-in", "Zoom In")
-
-        zoom_row.addWidget(self.btn_zoom_out)
-        zoom_row.addWidget(self.btn_fit)
-        zoom_row.addWidget(self.btn_zoom_in)
-        zoom_row.addStretch(1)  # optional: keeps them left-aligned
-
-        layout.addLayout(zoom_row)
+        self.zoom_bar = PreviewZoomBar(
+            self, self.graphics_view.viewport(), zoom_in=self.zoom_in,
+            zoom_out=self.zoom_out, actual=self._zoom_actual,
+            fit=self.fit_to_view,
+            scale=lambda: self.graphics_view.transform().m11(),
+        )
+        layout.insertWidget(2, self.zoom_bar)
+        self.zoom_bar.enable_comparison(self._show_comparison_before)
 
         # --- preset drag handle (grip) ---
         try:
@@ -439,9 +433,7 @@ class BackgroundNeutralizationDialog(QDialog):
         self.btn_cancel.clicked.connect(self.close)
         self.btn_toggle_stretch.clicked.connect(self._toggle_auto_stretch)
         self.btn_find_bg.clicked.connect(self._on_find_background)
-        self.btn_zoom_out.clicked.connect(self.zoom_out)
-        self.btn_fit.clicked.connect(self.fit_to_view)
-        self.btn_zoom_in.clicked.connect(self.zoom_in)        
+
 
         self.graphics_view.viewport().installEventFilter(self)
         self.origin_scene = QPointF()
@@ -494,6 +486,8 @@ class BackgroundNeutralizationDialog(QDialog):
             qimg = QImage((disp * 255).astype(np.uint8).tobytes(), w, h, 3 * w, QImage.Format.Format_RGB888)
 
         pix = QPixmap.fromImage(qimg)
+        self._before_pixmap = pix
+        self._after_pixmap = pix
 
         # Add to scene; force scene rect to native image pixels and place at (0,0)
         self.scene.clear()
@@ -509,9 +503,37 @@ class BackgroundNeutralizationDialog(QDialog):
         self._user_zoomed = False
 
     def _toggle_auto_stretch(self):
+        preset = self.get_preset() if self.selection_item is not None else None
         self.auto_stretch = not self.auto_stretch
         self.btn_toggle_stretch.setText("Toggle Auto-Stretch")
         self._load_image()
+        if preset is not None:
+            self.seed_from_preset(preset)
+
+    def _show_comparison_before(self, before):
+        item = getattr(self, 'pixmap_item', None)
+        if item is not None:
+            pixmap = self._before_pixmap if before else self._after_pixmap
+            item.setPixmap(pixmap)
+
+    def _refresh_neutralization_preview(self):
+        if self.selection_item is None:
+            return
+        image = self._doc_image_normalized()
+        if image.ndim != 3 or image.shape[2] != 3:
+            return
+        rect = self._scene_rect_to_image_rect()
+        out = background_neutralize_rgb(image, rect)
+        mask = _active_mask_array_from_doc(self.doc)
+        if mask is not None:
+            out = image * (1.0 - mask[..., None]) + out * mask[..., None]
+        if self.auto_stretch:
+            out = stretch_color_image(
+                out, 0.25, linked=False, normalize=False,
+            )
+        from setiastro.saspro.widgets.image_utils import numpy_to_qimage
+        self._after_pixmap = QPixmap.fromImage(numpy_to_qimage(out))
+        self._show_comparison_before(self.zoom_bar.comparison.showing_before)
 
     # ---------- zoom ----------
     def eventFilter(self, source, event):
@@ -543,6 +565,7 @@ class BackgroundNeutralizationDialog(QDialog):
                 else:
                     pen = QPen(QColor(255, 0, 0), 2, Qt.PenStyle.SolidLine)
                     self.selection_item = self.scene.addRect(self.current_rect_scene, pen)
+                    self._refresh_neutralization_preview()
         return super().eventFilter(source, event)
 
     def _make_screen_stable_crosshair_group(self, cx: float, cy: float, color: QColor | None = None):
@@ -611,6 +634,7 @@ class BackgroundNeutralizationDialog(QDialog):
 
         self.scene.update()
         self.graphics_view.viewport().update()
+        self._refresh_neutralization_preview()
 
     def _scene_rect_to_image_rect(self) -> tuple[int, int, int, int]:
         if not self.current_rect_scene or self.current_rect_scene.isNull():
@@ -701,6 +725,7 @@ class BackgroundNeutralizationDialog(QDialog):
         pen = QPen(QColor(255, 0, 0), 2, Qt.PenStyle.SolidLine)
         pen.setCosmetic(True)
         self.selection_item = self.scene.addRect(self.current_rect_scene, pen)
+        self._refresh_neutralization_preview()
 
     def _on_apply(self):
         try:
@@ -831,15 +856,27 @@ class BackgroundNeutralizationDialog(QDialog):
         self._user_zoomed = True
         cur = self.graphics_view.transform().m11()
         new_scale = cur * factor
-        if new_scale < 0.01 or new_scale > 100.0:
+        if new_scale < 1e-6 or new_scale > max(8.0, cur):
             return
+        center = self.graphics_view.mapToScene(
+            self.graphics_view.viewport().rect().center()
+        )
         self.graphics_view.scale(factor, factor)
+        self.graphics_view.centerOn(center)
 
     def zoom_in(self):
         self._zoom(1.25)
 
     def zoom_out(self):
         self._zoom(0.8)
+
+    def _zoom_actual(self):
+        self._user_zoomed = True
+        center = self.graphics_view.mapToScene(
+            self.graphics_view.viewport().rect().center()
+        )
+        self.graphics_view.resetTransform()
+        self.graphics_view.centerOn(center)
 
     def fit_to_view(self):
         self._user_zoomed = False

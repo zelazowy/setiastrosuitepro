@@ -1,4 +1,5 @@
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import os
 import glob
 import shutil
@@ -934,9 +935,6 @@ class LiveStackWindow(QDialog):
         zo = QAction(QIcon.fromTheme("zoom-out"), "Zoom Out", self)
         fit = QAction(QIcon.fromTheme("zoom-fit-best"), "Fit to Window", self)
 
-        tb.addAction(zi)
-        tb.addAction(zo)
-        tb.addAction(fit)
 
         # Preview: statistical stretch (default) or the linear stack as it is
         tb.addSeparator()
@@ -1110,6 +1108,17 @@ class LiveStackWindow(QDialog):
                 app.aboutToQuit.connect(self._on_app_quit)
             except Exception:
                 pass
+
+        self.zoom_bar = PreviewZoomBar(
+            self,
+            self.view.viewport(),
+            zoom_in=self.zoom_in,
+            zoom_out=self.zoom_out,
+            actual=self.view.resetTransform,
+            fit=self.fit_to_window,
+            scale=lambda: abs(self.view.transform().m11()),
+        )
+        tb.insertWidget(tb.actions()[0], self.zoom_bar)
 
     def _should_stop(self) -> bool:
         # stop requested or not running anymore

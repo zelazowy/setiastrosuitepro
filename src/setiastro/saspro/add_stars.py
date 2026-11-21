@@ -1,5 +1,6 @@
 #saspro/add_stars.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import os
 import numpy as np
 
@@ -497,6 +498,21 @@ class AddStarsDialog(QDialog):
         self.slider_ratio.valueChanged.connect(lambda *_: _save())
         self.cmb_starless.currentIndexChanged.connect(lambda *_: _save())
         self.cmb_stars.currentIndexChanged.connect(lambda *_: _save())
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll_area.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_fit,
+            },
+            actual=lambda: (
+                setattr(self, 'scale_factor', 1.0),
+                self._refresh_scaled(),
+            ),
+            scale=lambda: self.scale_factor,
+        )
 
     # Populate combos with open docs (+ sentinel for file)
     def _populate_doc_combos(self):

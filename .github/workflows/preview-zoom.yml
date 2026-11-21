@@ -1,0 +1,57 @@
+name: Image preview QA
+
+on:
+  pull_request:
+    paths:
+      - 'src/setiastro/saspro/**'
+      - 'tests/test_preview*.py'
+      - 'requirements.txt'
+      - '.github/workflows/preview-zoom.yml'
+  push:
+    branches: ['feat/preview-zoom-controls', 'feat/unified-previews', 'integration/local-lab']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zoom-tests:
+    name: Image previews (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            qpa: windows
+          - os: ubuntu-latest
+            qpa: offscreen
+          - os: macos-latest
+            qpa: offscreen
+    env:
+      PYTHONPATH: src
+      QT_QPA_PLATFORM: ${{ matrix.qpa }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Install Linux Qt system libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - name: Install application and test dependencies
+        run: python -m pip install -r requirements.txt pytest
+      - name: Test zoom controls and migrated renderers
+        run: python -m pytest -v tests/test_preview_zoom_core.py tests/test_preview_zoom.py tests/test_preview_zoom_migration.py tests/test_preview_zoom_native.py tests/test_preview_comparison.py tests/test_preview_comparison_tools.py tests/test_preview_lab_integration.py tests/test_command_search.py tests/test_command_palette.py tests/test_native_menus.py --junitxml=zoom-results.xml
+      - name: Repeat shared controls with display scaling
+        env:
+          QT_SCALE_FACTOR: '2'
+        run: python -m pytest -v tests/test_preview_zoom_core.py tests/test_preview_comparison.py
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zoom-results-${{ matrix.os }}
+          path: zoom-results.xml

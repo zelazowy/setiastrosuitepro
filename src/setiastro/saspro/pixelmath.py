@@ -1,5 +1,6 @@
 #saspro/pixelmath.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import os
 import re
 import json
@@ -1010,7 +1011,10 @@ class _PreviewView(QGraphicsView):
         if ev.modifiers() & Qt.KeyboardModifier.ControlModifier:
             angle = ev.angleDelta().y()
             step = 1.25 if angle > 0 else 1/1.25
-            new_zoom = max(self._min_zoom, min(self._zoom * step, self._max_zoom))
+            self._zoom = abs(self.transform().m11())
+            new_zoom = max(
+                min(self._min_zoom, self._zoom / 1.25),
+                min(self._zoom * step, max(self._zoom, self._max_zoom)))
             step = new_zoom / self._zoom  # clamp-aware step
             self._zoom = new_zoom
             self.scale(step, step)
@@ -1024,7 +1028,10 @@ class _PreviewView(QGraphicsView):
         self._zoom = 1.0
 
     def zoom_by(self, factor: float):
-        new_zoom = max(self._min_zoom, min(self._zoom * float(factor), self._max_zoom))
+        self._zoom = abs(self.transform().m11())
+        new_zoom = max(
+            min(self._min_zoom, self._zoom / 1.25),
+            min(self._zoom * float(factor), max(self._zoom, self._max_zoom)))
         factor = new_zoom / self._zoom
         self._zoom = new_zoom
         self.scale(factor, factor)
@@ -1419,6 +1426,24 @@ class PixelMathDialogPro(QDialog):
         self.resize(940, 700)
         QTimer.singleShot(0, lambda: self._splitter.setSizes([320, max(620, self.width() - 320)]))
 
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.preview_view.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_fit,
+                'actual': self.btn_zoom_1_1,
+            },
+            actual=self._zoom_reset_1_1,
+            scale=lambda: abs(self.preview_view.transform().m11()),
+            ctrl_wheel=True,
+        )
+        self.preview_comparison = self.zoom_bar.enable_image_comparison(
+            self._comparison_before_image, self._redraw_comparison,
+            source_key=lambda: id(self.doc.image),
+        )
+
     # ─────────────── Auto-stretch prefs ───────────────
     def _as_settings(self):
         p = self.parent()
@@ -1500,6 +1525,7 @@ class PixelMathDialogPro(QDialog):
         """Render numpy float image into the preview scene, preserving zoom/pan."""
         qim = _float_to_qimage_rgb8(img)
         pm  = QPixmap.fromImage(qim)
+        pm = self.preview_comparison.image(pm)
 
         # --- capture current view state (before we clear/replace) ---
         view = self.preview_view
@@ -1532,6 +1558,15 @@ class PixelMathDialogPro(QDialog):
             view.centerOn(new_center)
 
         self.preview_view.viewport().update()    
+
+    def _comparison_before_image(self):
+        from setiastro.saspro.widgets.preview import source_preview_image
+        return source_preview_image(self.doc.image)
+
+    def _redraw_comparison(self):
+        if self._preview_item is not None:
+            comparison = self.preview_comparison
+            self._preview_item.setPixmap(comparison.image(comparison.result))
 
     def _zoom_by(self, factor: float):
         if self._preview_item is None:

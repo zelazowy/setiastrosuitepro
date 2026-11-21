@@ -1249,6 +1249,7 @@ from setiastro.saspro.whitebalance import apply_white_balance_to_doc
 
 # Shared utilities
 from setiastro.saspro.widgets.image_utils import to_float01 as _to_float01
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 
 
 class StarPreviewDialog(QDialog):
@@ -1348,6 +1349,13 @@ class StarPreviewDialog(QDialog):
         self.btn_zoom_out.clicked.connect(lambda: self._set_zoom(self._zoom / 1.25))
         self.btn_fit.clicked.connect(self._zoom_fit)
         self.btn_1to1.clicked.connect(lambda: self._set_zoom(1.0))
+        self.zoom_bar = PreviewZoomBar.replace(
+            self, self.preview,
+            buttons={'out': self.btn_zoom_out, 'in': self.btn_zoom_in,
+                     'fit': self.btn_fit, 'actual': self.btn_1to1},
+            scale=lambda: self._zoom,
+        )
+
 
         self.thr_slider.valueChanged.connect(self._on_thr_changed)
         self.chk_autostretch.toggled.connect(lambda _=None: self._debounce.start())

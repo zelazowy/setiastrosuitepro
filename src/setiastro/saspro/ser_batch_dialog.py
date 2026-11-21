@@ -1,6 +1,7 @@
 # src/setiastro/saspro/ser_batch_dialog.py
 from __future__ import annotations
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import os
 import traceback
 from typing import Optional, List
@@ -116,6 +117,18 @@ class _AnchorPickerDialog(QDialog):
 
         self._base_u8 = self._make_u8(self._ref)
         self._render()
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self._scroll.viewport(),
+            buttons={
+                'out': self.btn_zo,
+                'in': self.btn_zi,
+                'fit': self.btn_fit,
+                'actual': self.btn_100,
+            },
+            scale=lambda: self._zoom,
+        )
 
     @staticmethod
     def _make_u8(img01: np.ndarray) -> np.ndarray:

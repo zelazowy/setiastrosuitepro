@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import numpy as np
 
 import math
@@ -796,6 +797,18 @@ class RegionPickerDialog(QDialog):
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         self._load_image()
         QTimer.singleShot(0, self.fit_to_view)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_zoom_fit,
+                'actual': self.btn_zoom_100,
+            },
+            scale=lambda: abs(self.view.transform().m11()),
+        )
 
     # ---------- doc helpers ----------
     def _begin_interactive_present(self):

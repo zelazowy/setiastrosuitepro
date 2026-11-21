@@ -1,4 +1,5 @@
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar, preview_ratio
 import numpy as np
 
 try:
@@ -958,6 +959,33 @@ class SelectiveColorCorrection(QDialog):
         # change recomputes the mask); painting here too only built a mask
         # for the "Custom" range that was thrown away at once.
 
+        def ratio():
+            return preview_ratio(getattr(self, '_last_base', None), self.img)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'actual': self.btn_zoom_1,
+                'fit': self.btn_fit,
+            },
+            actual=lambda: self._apply_zoom(1.0 / ratio()),
+            scale=lambda: self._zoom * ratio(),
+            reduced=lambda: ratio() < 0.999,
+        )
+        self.preview_comparison = self.zoom_bar.enable_image_comparison(
+            lambda: _to_pixmap(self._last_base),
+            self._redraw_comparison,
+            source_key=lambda: id(self._last_base),
+        )
+
+    def _redraw_comparison(self):
+        comparison = self.preview_comparison
+        if comparison.result is not None:
+            self.lbl_preview.setPixmap(comparison.image(comparison.result))
+
     # --- Lasso helpers ---------------------------------------------------
     def _clear_region_mask(self):
         self._region_mask_full = None
@@ -1092,7 +1120,8 @@ class SelectiveColorCorrection(QDialog):
                         If None, use viewport center.
         """
         old_zoom = getattr(self, "_zoom", 1.0)
-        new_zoom = max(0.05, min(16.0, float(new_zoom)))
+        ratio = preview_ratio(getattr(self, "_last_base", None), self.img)
+        new_zoom = max(1e-6, min(16.0 / ratio, float(new_zoom)))
         if abs(new_zoom - old_zoom) < 1e-6:
             return
 
@@ -1850,6 +1879,8 @@ class SelectiveColorCorrection(QDialog):
         pm_scaled = pm.scaled(zw, zh, Qt.AspectRatioMode.IgnoreAspectRatio,
                             Qt.TransformationMode.SmoothTransformation)
         pm_scaled = self._draw_region_outline_on_pixmap(pm_scaled)
+        if hasattr(self, 'preview_comparison'):
+            pm_scaled = self.preview_comparison.image(pm_scaled)
         self.lbl_preview.setPixmap(pm_scaled)
         self.lbl_preview.resize(zw, zh)
 

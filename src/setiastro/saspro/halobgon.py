@@ -1,5 +1,6 @@
 #saspro/halobgon.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import numpy as np
 import cv2
 from typing import Optional
@@ -268,7 +269,7 @@ class _PreviewView(QGraphicsView):
     def fit_to(self, rect: QRectF):
         if rect.isEmpty(): return
         self.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
-        self._zoom = 1.0
+        self._zoom = abs(self.transform().m11())
 
 class _HaloPreviewWorker(QThread):
     """One preview off the GUI thread (2-3.5 s on 22 MP, all of it on the GUI
@@ -426,11 +427,27 @@ class HaloBGonDialogPro(QDialog):
         self._timer.start(0)
         self.resize(900, 620)
 
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={'out': b_minus, 'in': b_plus, 'fit': b_fit},
+            actual=lambda: self.view.set_zoom(1.0),
+            scale=lambda: abs(self.view.transform().m11()),
+        )
+        from setiastro.saspro.widgets.image_utils import numpy_to_qimage
+        self.preview_comparison = self.zoom_bar.enable_pixmap_comparison(
+            lambda: numpy_to_qimage(self.orig), self.pix,
+            source_key=lambda: id(self.orig),
+        )
+
     def _debounce(self): self._timer.start(180)
 
     def _set_pix(self, rgb):
         q = _qimage_from_rgb01(rgb)
-        self.pix.setPixmap(QPixmap.fromImage(q))
+        pixmap = QPixmap.fromImage(q)
+        if hasattr(self, 'preview_comparison'):
+            pixmap = self.preview_comparison.image(pixmap)
+        self.pix.setPixmap(pixmap)
         self.view.setSceneRect(self.pix.boundingRect())
 
     def _params(self):
@@ -495,7 +512,8 @@ class HaloBGonDialogPro(QDialog):
             return
         self._pv_prep = (res["orig"], res["linear"], res["prep"])
         self._pv_result = (res["orig"], res["level"], res["linear"], res["u8"])
-        self.pix.setPixmap(QPixmap.fromImage(res["qimg"]))
+        pixmap = self.preview_comparison.image(QPixmap.fromImage(res["qimg"]))
+        self.pix.setPixmap(pixmap)
         self.view.setSceneRect(self.pix.boundingRect())
 
     def _on_preview_finished(self):

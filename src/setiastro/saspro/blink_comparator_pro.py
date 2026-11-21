@@ -2,6 +2,7 @@
 # thread safe version
 from __future__ import annotations
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 from setiastro.saspro.main_helpers import non_blocking_sleep
 
 # ⬇️ keep your existing imports used by the code you pasted
@@ -3204,6 +3205,22 @@ class BlinkTab(QWidget):
         )
         self.imagesChanged.connect(self._update_loaded_count_label)
         self._apply_button_palette()
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll_area.viewport(),
+            buttons={
+                'out': self.zoom_out_btn,
+                'in': self.zoom_in_btn,
+                'fit': self.fit_btn,
+            },
+            actual=lambda: (
+                self._set_auto_fit(False),
+                setattr(self, 'zoom_level', 1.0),
+                self.apply_zoom(),
+            ),
+            scale=lambda: self.zoom_level,
+        )
 
     def _apply_button_palette(self):
         """

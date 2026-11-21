@@ -1,6 +1,7 @@
 #saspro/narrowbandintegration.py
 
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar, preview_ratio
 import numpy as np
 
 try:
@@ -917,6 +918,26 @@ class NarrowbandIntegrationDialog(QDialog):
         except Exception:
             self.resize(1100, 720)
 
+        def ratio():
+            return preview_ratio(
+                getattr(self, '_cached_result_pm', None),
+                getattr(self.cmb_rgb.currentData(), 'image', None),
+            )
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'actual': self.btn_zoom_1,
+                'fit': self.btn_fit,
+            },
+            actual=lambda: self._apply_zoom(1.0 / ratio()),
+            scale=lambda: self._zoom * ratio(),
+            reduced=lambda: ratio() < 0.999,
+        )
+
     # -----------------------------------------------------------------------
     # Dynamic filter management
     # -----------------------------------------------------------------------
@@ -1211,7 +1232,11 @@ class NarrowbandIntegrationDialog(QDialog):
 
     def _apply_zoom(self, new_zoom: float, anchor_label_pos=None):
         old_zoom = self._zoom
-        new_zoom = max(0.05, min(16.0, float(new_zoom)))
+        ratio = preview_ratio(
+            self._cached_result_pm,
+            getattr(self.cmb_rgb.currentData(), 'image', None),
+        )
+        new_zoom = max(1e-6, min(16.0 / ratio, float(new_zoom)))
         if abs(new_zoom - old_zoom) < 1e-6:
             return
         sx, sy, _, _ = self._current_scroll()

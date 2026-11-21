@@ -4,6 +4,7 @@ Centralized preview dialog widgets for Seti Astro Suite Pro.
 """
 from __future__ import annotations
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import numpy as np
 from PyQt6.QtCore import Qt, QTimer, QPoint, QEvent
 from PyQt6.QtGui import QImage, QPixmap, QIcon
@@ -129,6 +130,18 @@ class ImagePreviewDialog(QDialog):
         
         # Center scrollbars after layout
         QTimer.singleShot(0, self._fit_to_preview)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll_area.viewport(),
+            buttons={
+                'out': self.zoom_out_button,
+                'in': self.zoom_in_button,
+                'fit': self.fit_button,
+                'actual': self.zoom_1to1_button,
+            },
+            scale=lambda: self.zoom_factor,
+        )
     
     def _display_image(self, np_img: np.ndarray):
         """Convert numpy array to QImage and display at current zoom."""

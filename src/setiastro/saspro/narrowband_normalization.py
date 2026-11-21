@@ -1,6 +1,7 @@
 # src/setiastro/saspro/narrowband_normalization.py
 from __future__ import annotations
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import os
 import numpy as np
 from PIL import Image
@@ -293,6 +294,18 @@ class NarrowbandNormalization(QWidget):
 
         # Initial state
         self._refresh_visibility()
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scroll.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_fit,
+            },
+            actual=lambda: self._zoom_at(1.0 / max(self._zoom, 1e-09)),
+            scale=lambda: self._zoom,
+        )
 
 
     def _init_widgets(self):

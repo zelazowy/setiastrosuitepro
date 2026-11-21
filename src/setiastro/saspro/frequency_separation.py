@@ -1,5 +1,6 @@
 #saspro/frequency_separation.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import os
 import numpy as np
 from setiastro.saspro.help_support import make_help_button
@@ -975,10 +976,28 @@ class FrequencySeperationTab(QWidget):
         row_previews = QHBoxLayout()
         row_previews.addWidget(self.scrollHF, 1)
         row_previews.addWidget(self.scrollLF, 1)
-        right.addLayout(row_previews, 1)
+        self.preview_pair = QWidget(self)
+        self.preview_pair.setLayout(row_previews)
+        right.addWidget(self.preview_pair, 1)
 
         right_host = QWidget(self); right_host.setLayout(right)
         main.addWidget(right_host, 1)
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.scrollLF.viewport(),
+            buttons={
+                'out': self.btn_zoom_out,
+                'in': self.btn_zoom_in,
+                'fit': self.btn_fit,
+            },
+            actual=lambda: self._zoom_at_pair(
+                1.0 / max(self.zoom_factor, 1e-09),
+            ),
+            scale=lambda: self.zoom_factor,
+        )
+        self.zoom_bar.watch_viewport(self.scrollHF.viewport())
+        self.zoom_bar.preview_content = self.preview_pair
 
     def _try_autoload_active(self) -> bool:
         # 1) DocManager paths
@@ -1953,7 +1972,7 @@ class FrequencySeperationTab(QWidget):
             return
 
         old = self.zoom_factor
-        new = max(0.05, min(8.0, old * factor))
+        new = max(1e-6, min(8.0, old * factor))
         ratio = new / max(1e-6, old)
 
         def _center(sc):
@@ -1999,7 +2018,10 @@ class FrequencySeperationTab(QWidget):
         if base_w is None:
             return
         vpw = min(self.scrollHF.viewport().width(), self.scrollLF.viewport().width())
-        self.zoom_factor = max(0.05, min(8.0, vpw / float(base_w)))
+        vph = min(self.scrollHF.viewport().height(),
+                  self.scrollLF.viewport().height())
+        self.zoom_factor = max(
+            1e-6, min(vpw / float(base_w), vph / float(base_h)))
         self._update_previews()
 
     # --------------- pushing to new views ---------------

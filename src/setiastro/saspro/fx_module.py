@@ -1,5 +1,6 @@
 #saspro/fx_module.py
 from __future__ import annotations
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar, preview_ratio
 import colorsys
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
@@ -778,16 +779,6 @@ class FXDialog(QDialog):
         # ── right: preview ────────────────────────────────────────────────────
         right = QVBoxLayout()
 
-        zoom_row = QHBoxLayout()
-        for label, slot in (("–", self._zoom_out), ("+", self._zoom_in),
-                             ("Fit", self._fit)):
-            b = QPushButton(label)
-            b.setFixedWidth(44)
-            b.clicked.connect(slot)
-            zoom_row.addWidget(b)
-        zoom_row.addStretch(1)
-        right.addLayout(zoom_row)
-
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -798,6 +789,31 @@ class FXDialog(QDialog):
 
         root.addLayout(right, 1)
         self.resize(1050, 620)
+
+        def ratio():
+            return preview_ratio(
+                getattr(self, '_pix_original', None),
+                getattr(self.doc, 'image', None),
+            )
+
+        self.zoom_bar = PreviewZoomBar(
+            self,
+            self.scroll.viewport(),
+            zoom_in=self._zoom_in,
+            zoom_out=self._zoom_out,
+            actual=lambda: self._set_zoom(1.0 / ratio()),
+            fit=self._fit,
+            scale=lambda: self._zoom * ratio(),
+            reduced=lambda: ratio() < 0.999,
+        )
+        self.btn_toggle.hide()
+        self.preview_comparison = self.zoom_bar.enable_image_comparison(
+            lambda: self._pix_original,
+            lambda: self._show_pixmap(
+                self._pix_processed or self._pix_original),
+            source_key=lambda: id(self._pix_original),
+        )
+        right.insertWidget(1, self.zoom_bar)
 
     # ── effect selection / dynamic controls ───────────────────────────────────
 
@@ -975,6 +991,8 @@ class FXDialog(QDialog):
             QTimer.singleShot(0, self._fit)
 
     def _show_pixmap(self, pix: QPixmap):
+        if pix is not None and hasattr(self, 'preview_comparison'):
+            pix = self.preview_comparison.image(pix)
         scaled = pix.scaled(
             pix.size() * self._zoom,
             Qt.AspectRatioMode.KeepAspectRatio,
@@ -1118,7 +1136,11 @@ class FXDialog(QDialog):
 
     def _set_zoom(self, z: float, anchor: QPointF | None = None):
         old_zoom = self._zoom
-        self._zoom = max(0.05, min(z, 5.0))
+        ratio = preview_ratio(
+            self._pix_original,
+            getattr(self.doc, 'image', None),
+        )
+        self._zoom = max(1e-6, min(z, 8.0 / ratio))
 
         pix = (self._pix_original if self._showing_original
                else self._pix_processed)
@@ -1155,7 +1177,7 @@ class FXDialog(QDialog):
             return
         vp = self.scroll.viewport().size()
         s  = min(vp.width() / pix.width(), vp.height() / pix.height())
-        self._set_zoom(max(0.05, s))
+        self._set_zoom(max(1e-6, s))
 
     def eventFilter(self, obj, ev):
         if obj is self.scroll.viewport():

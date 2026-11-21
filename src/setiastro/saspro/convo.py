@@ -1,6 +1,7 @@
 # saspro/convo.py
 from __future__ import annotations
 
+from setiastro.saspro.widgets.preview_zoom import PreviewZoomBar
 import os
 import math
 import numpy as np
@@ -517,6 +518,19 @@ class ConvoDeconvoDialog(QDialog):
 
         self._snapshot_reset_defaults()
         self._update_psf_preview()
+
+        self.zoom_bar = PreviewZoomBar.replace(
+            self,
+            self.view.viewport(),
+            buttons={
+                'out': self.zoom_out_btn,
+                'in': self.zoom_in_btn,
+                'fit': self.fit_btn,
+            },
+            actual=self.view.resetTransform,
+            scale=lambda: abs(self.view.transform().m11()),
+        )
+        self._cmp.use_shared_hold(self.zoom_bar)
 
     def _active_doc(self):
         # 1) If we were given a specific doc (ROI or full), always use that.
